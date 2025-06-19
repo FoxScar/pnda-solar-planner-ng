@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -8,39 +8,37 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Info, Plus, Trash2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 const ApplianceSelection = ({ onNext, onBack, data }) => {
   const [appliances, setAppliances] = useState(data?.appliances || []);
+  const [availableAppliances, setAvailableAppliances] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const nigerianAppliances = [
-    { name: 'LED Bulb (9W)', power: 9 },
-    { name: 'LED Bulb (15W)', power: 15 },
-    { name: 'Fluorescent Light (18W)', power: 18 },
-    { name: 'Fluorescent Light (36W)', power: 36 },
-    { name: 'Standing Fan', power: 75 },
-    { name: 'Ceiling Fan', power: 60 },
-    { name: 'Table Fan', power: 45 },
-    { name: 'TV (32" LED)', power: 65 },
-    { name: 'TV (43" LED)', power: 85 },
-    { name: 'TV (55" LED)', power: 120 },
-    { name: 'Sound System', power: 150 },
-    { name: 'Decoder (DStv/GOtv)', power: 25 },
-    { name: 'Laptop', power: 65 },
-    { name: 'Phone Charger', power: 15 },
-    { name: 'Small Fridge (120L)', power: 150 },
-    { name: 'Medium Fridge (200L)', power: 200 },
-    { name: 'Large Fridge (300L)', power: 280 },
-    { name: 'Freezer (200L)', power: 180 },
-    { name: 'Washing Machine', power: 500 },
-    { name: 'Blender', power: 350 },
-    { name: 'Iron', power: 1000 },
-    { name: 'Microwave', power: 800 },
-    { name: 'Water Pump (0.5HP)', power: 370 },
-    { name: 'Water Pump (1HP)', power: 750 },
-    { name: 'AC Unit (1HP)', power: 750 },
-    { name: 'AC Unit (1.5HP)', power: 1100 },
-    { name: 'AC Unit (2HP)', power: 1500 }
-  ];
+  useEffect(() => {
+    fetchAppliances();
+  }, []);
+
+  const fetchAppliances = async () => {
+    try {
+      const { data: appliancesData, error } = await supabase
+        .from('appliances')
+        .select('*')
+        .order('category', { ascending: true })
+        .order('name', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching appliances:', error);
+        return;
+      }
+
+      setAvailableAppliances(appliancesData || []);
+    } catch (error) {
+      console.error('Error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const addAppliance = () => {
     setAppliances([...appliances, {
@@ -65,10 +63,10 @@ const ApplianceSelection = ({ onNext, onBack, data }) => {
   };
 
   const handleApplianceSelect = (id, selectedName) => {
-    const selectedAppliance = nigerianAppliances.find(app => app.name === selectedName);
+    const selectedAppliance = availableAppliances.find(app => app.name === selectedName);
     if (selectedAppliance) {
       updateAppliance(id, 'name', selectedAppliance.name);
-      updateAppliance(id, 'power', selectedAppliance.power);
+      updateAppliance(id, 'power', selectedAppliance.power_rating);
     }
   };
 
@@ -79,6 +77,16 @@ const ApplianceSelection = ({ onNext, onBack, data }) => {
   };
 
   const isValid = appliances.length > 0 && appliances.every(app => app.name && app.quantity > 0);
+
+  if (loading) {
+    return (
+      <Card className="w-full max-w-2xl mx-auto">
+        <CardContent className="p-6">
+          <div className="text-center">Loading appliances...</div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <TooltipProvider>
@@ -122,9 +130,9 @@ const ApplianceSelection = ({ onNext, onBack, data }) => {
                         <SelectValue placeholder="Choose appliance" />
                       </SelectTrigger>
                       <SelectContent>
-                        {nigerianAppliances.map((item) => (
-                          <SelectItem key={item.name} value={item.name}>
-                            {item.name}
+                        {availableAppliances.map((item) => (
+                          <SelectItem key={item.id} value={item.name}>
+                            {item.name} ({item.power_rating}W)
                           </SelectItem>
                         ))}
                       </SelectContent>

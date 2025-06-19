@@ -1,52 +1,66 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CheckCircle, Zap } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 const InverterSizing = ({ onNext, onBack, data }) => {
   const [selectedInverter, setSelectedInverter] = useState(data?.inverter || null);
+  const [inverters, setInverters] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  // Mock inverter data - in real app this would come from backend
-  const inverters = [
-    {
-      id: 1,
-      name: 'Felicity 1.5kVA Inverter',
-      voltage: '12V',
-      kva: '1.5kVA',
-      cost: 85000,
-      recommended: true,
-      description: 'Perfect for small homes with basic appliances'
-    },
-    {
-      id: 2,
-      name: 'Felicity 2.5kVA Inverter',
-      voltage: '24V',
-      kva: '2.5kVA',
-      cost: 120000,
-      recommended: false,
-      description: 'Great for medium homes with more appliances'
-    },
-    {
-      id: 3,
-      name: 'Felicity 3.5kVA Inverter',
-      voltage: '24V',
-      kva: '3.5kVA',
-      cost: 165000,
-      recommended: false,
-      description: 'Ideal for larger homes with high power needs'
-    },
-    {
-      id: 4,
-      name: 'Felicity 5kVA Inverter',
-      voltage: '48V',
-      kva: '5kVA',
-      cost: 220000,
-      recommended: false,
-      description: 'Best for homes with AC units and heavy appliances'
+  useEffect(() => {
+    fetchInverters();
+  }, []);
+
+  const fetchInverters = async () => {
+    try {
+      const { data: inverterData, error } = await supabase
+        .from('inverters')
+        .select('*')
+        .eq('available', true)
+        .order('kva_rating', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching inverters:', error);
+        return;
+      }
+
+      // Calculate recommended inverter based on total power from appliances
+      const totalPower = calculateTotalPower();
+      const invertersWithRecommendation = (inverterData || []).map((inverter, index) => ({
+        ...inverter,
+        recommended: index === getRecommendedInverterIndex(inverterData || [], totalPower)
+      }));
+
+      setInverters(invertersWithRecommendation);
+    } catch (error) {
+      console.error('Error:', error);
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
+
+  const calculateTotalPower = () => {
+    if (!data?.appliances) return 0;
+    return data.appliances.reduce((total, appliance) => {
+      return total + (appliance.power * appliance.quantity);
+    }, 0);
+  };
+
+  const getRecommendedInverterIndex = (inverterData, totalPower) => {
+    // Add 20% safety margin and convert to kVA
+    const requiredKva = (totalPower * 1.2) / 1000;
+    
+    // Find the first inverter that can handle the load
+    const recommendedIndex = inverterData.findIndex(inverter => 
+      inverter.kva_rating >= requiredKva
+    );
+    
+    return recommendedIndex === -1 ? 0 : recommendedIndex;
+  };
 
   const handleNext = () => {
     if (selectedInverter) {
@@ -61,6 +75,16 @@ const InverterSizing = ({ onNext, onBack, data }) => {
       minimumFractionDigits: 0
     }).format(price);
   };
+
+  if (loading) {
+    return (
+      <Card className="w-full max-w-2xl mx-auto">
+        <CardContent className="p-6">
+          <div className="text-center">Loading inverters...</div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card className="w-full max-w-2xl mx-auto">
@@ -91,7 +115,7 @@ const InverterSizing = ({ onNext, onBack, data }) => {
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2">
-                      <h3 className="font-semibold text-lg">{inverter.name}</h3>
+                      <h3 className="font-semibold text-lg">{inverter.model_name}</h3>
                       {inverter.recommended && (
                         <Badge className="bg-green-100 text-green-700 border-green-200">
                           Recommended
@@ -102,23 +126,25 @@ const InverterSizing = ({ onNext, onBack, data }) => {
                       )}
                     </div>
                     
-                    <p className="text-gray-600 text-sm mb-3">{inverter.description}</p>
-                    
-                    <div className="flex items-center gap-4 text-sm">
+                    <div className="flex items-center gap-4 text-sm mb-3">
                       <div className="flex items-center gap-1">
                         <span className="font-medium">Voltage:</span>
-                        <span className="text-gray-600">{inverter.voltage}</span>
+                        <span className="text-gray-600">{inverter.voltage_bus}V</span>
                       </div>
                       <div className="flex items-center gap-1">
                         <span className="font-medium">Capacity:</span>
-                        <span className="text-gray-600">{inverter.kva}</span>
+                        <span className="text-gray-600">{inverter.kva_rating}kVA</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="font-medium">Surge:</span>
+                        <span className="text-gray-600">{inverter.surge_capacity}</span>
                       </div>
                     </div>
                   </div>
                   
                   <div className="text-right">
                     <div className="text-xl font-bold text-gray-900">
-                      {formatPrice(inverter.cost)}
+                      {formatPrice(inverter.unit_cost)}
                     </div>
                   </div>
                 </div>
@@ -132,8 +158,8 @@ const InverterSizing = ({ onNext, onBack, data }) => {
             <CardContent className="p-4">
               <h4 className="font-medium text-blue-900 mb-2">Why this inverter?</h4>
               <p className="text-blue-800 text-sm">
-                The {selectedInverter.name} can handle your power requirements efficiently. 
-                It provides {selectedInverter.kva} of power capacity, which is sufficient for 
+                The {selectedInverter.model_name} can handle your power requirements efficiently. 
+                It provides {selectedInverter.kva_rating}kVA of power capacity, which is sufficient for 
                 your selected appliances with room for future expansion.
               </p>
             </CardContent>

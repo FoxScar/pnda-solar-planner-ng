@@ -1,61 +1,98 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { CheckCircle, PanelsTopLeft, Sun } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 const PanelSizing = ({ onNext, onBack, data }) => {
   const [selectedState, setSelectedState] = useState('');
   const [selectedPanel, setSelectedPanel] = useState(data?.panels || null);
+  const [panels, setPanels] = useState([]);
+  const [sunHours, setSunHours] = useState({});
+  const [loading, setLoading] = useState(true);
 
-  const nigerianStates = [
-    'Abia', 'Adamawa', 'Akwa Ibom', 'Anambra', 'Bauchi', 'Bayelsa', 'Benue', 'Borno',
-    'Cross River', 'Delta', 'Ebonyi', 'Edo', 'Ekiti', 'Enugu', 'FCT', 'Gombe', 'Imo',
-    'Jigawa', 'Kaduna', 'Kano', 'Katsina', 'Kebbi', 'Kogi', 'Kwara', 'Lagos', 'Nasarawa',
-    'Niger', 'Ogun', 'Ondo', 'Osun', 'Oyo', 'Plateau', 'Rivers', 'Sokoto', 'Taraba',
-    'Yobe', 'Zamfara'
-  ];
+  useEffect(() => {
+    fetchData();
+  }, []);
 
-  // Mock panel data - would be calculated based on location and needs
-  const panels = [
-    {
-      id: 1,
-      model: 'Monocrystalline 400W',
-      quantity: 6,
-      totalWatts: 2400,
-      cost: 360000,
-      recommended: true,
-      description: 'High efficiency panels, perfect for Nigerian climate',
-      efficiency: '21%'
-    },
-    {
-      id: 2,
-      model: 'Polycrystalline 350W',
-      quantity: 7,
-      totalWatts: 2450,
-      cost: 315000,
-      recommended: false,
-      description: 'Good value option with reliable performance',
-      efficiency: '18%'
-    },
-    {
-      id: 3,
-      model: 'Monocrystalline 450W',
-      quantity: 6,
-      totalWatts: 2700,
-      cost: 405000,
-      recommended: false,
-      description: 'Premium high-power panels for maximum output',
-      efficiency: '22%'
+  const fetchData = async () => {
+    try {
+      const [panelsResponse, sunHoursResponse] = await Promise.all([
+        supabase.from('panels').select('*').eq('available', true).order('rated_power', { ascending: true }),
+        supabase.from('sun_hours').select('*').order('state', { ascending: true })
+      ]);
+
+      if (panelsResponse.error || sunHoursResponse.error) {
+        console.error('Error fetching data:', panelsResponse.error || sunHoursResponse.error);
+        return;
+      }
+
+      // Calculate recommended panels based on energy needs
+      const energyNeeds = calculateEnergyNeeds();
+      const panelsWithRecommendation = (panelsResponse.data || []).map((panel, index) => ({
+        ...panel,
+        recommended: index === getRecommendedPanelIndex(panelsResponse.data || [], energyNeeds),
+        quantity: calculatePanelQuantity(panel, energyNeeds),
+        totalWatts: calculatePanelQuantity(panel, energyNeeds) * panel.rated_power,
+        totalCost: calculatePanelQuantity(panel, energyNeeds) * panel.unit_cost
+      }));
+
+      setPanels(panelsWithRecommendation);
+
+      // Convert sun hours array to object for easy lookup
+      const sunHoursMap = {};
+      (sunHoursResponse.data || []).forEach(item => {
+        sunHoursMap[item.state] = item.hours;
+      });
+      setSunHours(sunHoursMap);
+    } catch (error) {
+      console.error('Error:', error);
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
+
+  const calculateEnergyNeeds = () => {
+    if (!data?.appliances) return 0;
+    return data.appliances.reduce((total, appliance) => {
+      const dailyEnergyWh = appliance.power * appliance.quantity * appliance.hoursPerDay;
+      return total + dailyEnergyWh;
+    }, 0) / 1000; // Convert to kWh
+  };
+
+  const calculatePanelQuantity = (panel, energyNeeds) => {
+    const avgSunHours = 5.0; // Use average for calculation
+    const dailyGenerationPerPanel = (panel.rated_power * panel.derating_factor * avgSunHours) / 1000;
+    const requiredQuantity = Math.ceil((energyNeeds * 1.2) / dailyGenerationPerPanel); // 20% safety margin
+    return Math.max(1, requiredQuantity);
+  };
+
+  const getRecommendedPanelIndex = (panelData, energyNeeds) => {
+    // Prefer monocrystalline panels for efficiency
+    const monoPanels = panelData.filter(p => p.model_name.includes('Monocrystalline'));
+    if (monoPanels.length > 0) {
+      // Find the most cost-effective mono panel
+      const costEffectiveIndex = panelData.findIndex(p => 
+        p.model_name.includes('Monocrystalline') && p.rated_power >= 400
+      );
+      if (costEffectiveIndex !== -1) return costEffectiveIndex;
+    }
+    return 0; // Default to first panel
+  };
 
   const handleNext = () => {
     if (selectedState && selectedPanel) {
-      onNext({ state: selectedState, panels: selectedPanel });
+      onNext({ 
+        state: selectedState, 
+        panels: {
+          ...selectedPanel,
+          sunHours: sunHours[selectedState] || 5.0
+        }
+      });
     }
   };
 
@@ -68,13 +105,23 @@ const PanelSizing = ({ onNext, onBack, data }) => {
   };
 
   const getSunHours = (state) => {
-    // Simplified mapping - real app would have detailed data
-    const sunHours = {
-      'Lagos': 4.5, 'Kano': 5.8, 'Kaduna': 5.5, 'FCT': 5.2, 'Rivers': 4.2,
-      'Ogun': 4.8, 'Plateau': 5.5, 'Katsina': 6.0, 'Bauchi': 5.7
-    };
     return sunHours[state] || 5.0;
   };
+
+  const calculateDailyGeneration = (panel, state) => {
+    const stateHours = getSunHours(state);
+    return Math.round((panel.totalWatts * panel.derating_factor * stateHours) / 1000);
+  };
+
+  if (loading) {
+    return (
+      <Card className="w-full max-w-2xl mx-auto">
+        <CardContent className="p-6">
+          <div className="text-center">Loading panels and sun data...</div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card className="w-full max-w-2xl mx-auto">
@@ -93,7 +140,7 @@ const PanelSizing = ({ onNext, onBack, data }) => {
               <SelectValue placeholder="Select your state" />
             </SelectTrigger>
             <SelectContent>
-              {nigerianStates.map((state) => (
+              {Object.keys(sunHours).map((state) => (
                 <SelectItem key={state} value={state}>
                   {state}
                 </SelectItem>
@@ -135,7 +182,7 @@ const PanelSizing = ({ onNext, onBack, data }) => {
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center gap-2">
-                        <h3 className="font-semibold text-lg">{panel.model}</h3>
+                        <h3 className="font-semibold text-lg">{panel.model_name}</h3>
                         {panel.recommended && (
                           <Badge className="bg-green-100 text-green-700 border-green-200">
                             Recommended
@@ -148,14 +195,12 @@ const PanelSizing = ({ onNext, onBack, data }) => {
                       
                       <div className="text-right">
                         <div className="text-xl font-bold text-gray-900">
-                          {formatPrice(panel.cost)}
+                          {formatPrice(panel.totalCost)}
                         </div>
                       </div>
                     </div>
                     
-                    <p className="text-gray-600 text-sm mb-3">{panel.description}</p>
-                    
-                    <div className="grid grid-cols-3 gap-4 text-sm">
+                    <div className="grid grid-cols-4 gap-4 text-sm">
                       <div>
                         <span className="font-medium block">Quantity:</span>
                         <span className="text-gray-600">{panel.quantity} panels</span>
@@ -165,8 +210,12 @@ const PanelSizing = ({ onNext, onBack, data }) => {
                         <span className="text-gray-600">{panel.totalWatts}W</span>
                       </div>
                       <div>
+                        <span className="font-medium block">Unit Power:</span>
+                        <span className="text-gray-600">{panel.rated_power}W</span>
+                      </div>
+                      <div>
                         <span className="font-medium block">Efficiency:</span>
-                        <span className="text-gray-600">{panel.efficiency}</span>
+                        <span className="text-gray-600">{(panel.derating_factor * 100).toFixed(0)}%</span>
                       </div>
                     </div>
                   </CardContent>
@@ -176,15 +225,15 @@ const PanelSizing = ({ onNext, onBack, data }) => {
           </div>
         )}
 
-        {selectedPanel && (
+        {selectedPanel && selectedState && (
           <Card className="bg-green-50 border-green-200">
             <CardContent className="p-4">
               <h4 className="font-medium text-green-900 mb-2">Your Solar Generation</h4>
               <p className="text-green-800 text-sm">
-                With {selectedPanel.quantity} × {selectedPanel.model} panels in {selectedState}, 
+                With {selectedPanel.quantity} × {selectedPanel.model_name} panels in {selectedState}, 
                 you'll generate approximately{' '}
                 <strong>
-                  {Math.round(selectedPanel.totalWatts * getSunHours(selectedState) / 1000)} kWh
+                  {calculateDailyGeneration(selectedPanel, selectedState)} kWh
                 </strong>{' '}
                 of clean energy daily - enough to power your selected appliances and charge your batteries!
               </p>

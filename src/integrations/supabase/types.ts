@@ -9,7 +9,153 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      appliances: {
+        Row: {
+          category: string
+          created_at: string
+          id: string
+          is_energy_efficient: boolean | null
+          name: string
+          power_rating: number
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          id?: string
+          is_energy_efficient?: boolean | null
+          name: string
+          power_rating: number
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          id?: string
+          is_energy_efficient?: boolean | null
+          name?: string
+          power_rating?: number
+        }
+        Relationships: []
+      }
+      batteries: {
+        Row: {
+          available: boolean | null
+          capacity_kwh: number
+          chemistry: string
+          created_at: string
+          dod: number
+          efficiency: number
+          id: string
+          unit_cost: number
+          voltage: number
+        }
+        Insert: {
+          available?: boolean | null
+          capacity_kwh: number
+          chemistry: string
+          created_at?: string
+          dod: number
+          efficiency: number
+          id?: string
+          unit_cost: number
+          voltage: number
+        }
+        Update: {
+          available?: boolean | null
+          capacity_kwh?: number
+          chemistry?: string
+          created_at?: string
+          dod?: number
+          efficiency?: number
+          id?: string
+          unit_cost?: number
+          voltage?: number
+        }
+        Relationships: []
+      }
+      inverters: {
+        Row: {
+          available: boolean | null
+          created_at: string
+          id: string
+          kva_rating: number
+          model_name: string
+          surge_capacity: string | null
+          unit_cost: number
+          voltage_bus: number
+        }
+        Insert: {
+          available?: boolean | null
+          created_at?: string
+          id?: string
+          kva_rating: number
+          model_name: string
+          surge_capacity?: string | null
+          unit_cost: number
+          voltage_bus: number
+        }
+        Update: {
+          available?: boolean | null
+          created_at?: string
+          id?: string
+          kva_rating?: number
+          model_name?: string
+          surge_capacity?: string | null
+          unit_cost?: number
+          voltage_bus?: number
+        }
+        Relationships: []
+      }
+      panels: {
+        Row: {
+          available: boolean | null
+          created_at: string
+          derating_factor: number
+          id: string
+          model_name: string
+          rated_power: number
+          unit_cost: number
+        }
+        Insert: {
+          available?: boolean | null
+          created_at?: string
+          derating_factor: number
+          id?: string
+          model_name: string
+          rated_power: number
+          unit_cost: number
+        }
+        Update: {
+          available?: boolean | null
+          created_at?: string
+          derating_factor?: number
+          id?: string
+          model_name?: string
+          rated_power?: number
+          unit_cost?: number
+        }
+        Relationships: []
+      }
+      sun_hours: {
+        Row: {
+          created_at: string
+          hours: number
+          id: string
+          state: string
+        }
+        Insert: {
+          created_at?: string
+          hours: number
+          id?: string
+          state: string
+        }
+        Update: {
+          created_at?: string
+          hours?: number
+          id?: string
+          state?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
