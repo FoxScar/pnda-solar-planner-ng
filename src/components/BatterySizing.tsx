@@ -19,6 +19,7 @@ const BatterySizing = ({ onNext, onBack, data }) => {
     try {
       // Calculate daily energy needs
       const dailyEnergyKwh = calculateEnergyNeeds();
+      console.log('Daily energy needs (kWh):', dailyEnergyKwh);
       
       // Get battery recommendations using RPC for different chemistries
       const chemistries = ['Lithium', 'AGM', 'Flooded'];
@@ -39,9 +40,10 @@ const BatterySizing = ({ onNext, onBack, data }) => {
         }
       }
 
+      console.log('Battery recommendations:', batteryRecommendations);
       setBatteries(batteryRecommendations);
     } catch (error) {
-      console.error('Error:', error);
+      console.error('Error fetching batteries:', error);
     } finally {
       setLoading(false);
     }
@@ -55,7 +57,13 @@ const BatterySizing = ({ onNext, onBack, data }) => {
     }, 0) / 1000; // Convert to kWh
   };
 
+  const handleBatterySelect = (battery) => {
+    console.log('Battery selected:', battery);
+    setSelectedBattery(battery);
+  };
+
   const handleNext = () => {
+    console.log('Next button clicked, selected battery:', selectedBattery);
     if (selectedBattery) {
       onNext(selectedBattery);
     }
@@ -86,7 +94,10 @@ const BatterySizing = ({ onNext, onBack, data }) => {
     return (
       <Card className="w-full max-w-2xl mx-auto">
         <CardContent className="p-6">
-          <div className="text-center">Loading batteries...</div>
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto mb-4"></div>
+            <p>Loading battery options...</p>
+          </div>
         </CardContent>
       </Card>
     );
@@ -106,16 +117,16 @@ const BatterySizing = ({ onNext, onBack, data }) => {
           {batteries.map((battery) => (
             <Card 
               key={battery.battery_id}
-              className={`cursor-pointer transition-all duration-200 ${
+              className={`cursor-pointer transition-all duration-200 border-2 ${
                 selectedBattery?.battery_id === battery.battery_id 
-                  ? 'ring-2 ring-blue-500 bg-blue-50' 
-                  : 'hover:shadow-md'
+                  ? 'ring-2 ring-blue-500 bg-blue-50 border-blue-500' 
+                  : 'hover:shadow-md border-gray-200 hover:border-gray-300'
               } ${
                 battery.recommended 
                   ? 'border-green-200 bg-green-50/50' 
                   : ''
               }`}
-              onClick={() => setSelectedBattery(battery)}
+              onClick={() => handleBatterySelect(battery)}
             >
               <CardContent className="p-4">
                 <div className="flex items-start justify-between mb-3">
