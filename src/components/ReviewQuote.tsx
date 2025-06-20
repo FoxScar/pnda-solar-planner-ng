@@ -1,19 +1,62 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { FileText, Share2, Download, Eye } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 const ReviewQuote = ({ onBack, data }) => {
   const [showQuote, setShowQuote] = useState(false);
   const [adWatched, setAdWatched] = useState(false);
+  const [quoteData, setQuoteData] = useState(null);
+  const [loading, setLoading] = useState(false);
 
-  const mockAdWatch = () => {
-    // Simulate ad watching
+  const mockAdWatch = async () => {
     setAdWatched(true);
-    setShowQuote(true);
+    setLoading(true);
+    
+    try {
+      // Generate quote data using RPC function
+      const selectedComponents = {
+        inverter: {
+          id: data?.inverter?.id,
+          model_name: data?.inverter?.model_name,
+          unit_cost: data?.inverter?.unit_cost
+        },
+        battery: {
+          id: data?.battery?.battery_id,
+          configuration: data?.battery?.configuration,
+          total_cost: data?.battery?.total_cost
+        },
+        panels: {
+          id: data?.panels?.panels?.panel_id,
+          model_name: data?.panels?.panels?.model_name,
+          quantity: data?.panels?.panels?.recommended_quantity,
+          total_cost: data?.panels?.panels?.total_cost
+        }
+      };
+
+      const { data: quoteResult, error } = await supabase
+        .rpc('generate_quote_data', {
+          selected_components: selectedComponents
+        });
+
+      if (error) {
+        console.error('Error generating quote:', error);
+        return;
+      }
+
+      if (quoteResult && quoteResult.length > 0) {
+        setQuoteData(quoteResult[0]);
+        setShowQuote(true);
+      }
+    } catch (error) {
+      console.error('Error:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const formatPrice = (price) => {
@@ -24,28 +67,13 @@ const ReviewQuote = ({ onBack, data }) => {
     }).format(price);
   };
 
-  const calculateTotal = () => {
-    const inverterCost = data?.inverter?.cost || 0;
-    const batteryCost = data?.battery?.cost || 0;
-    const panelCost = data?.panels?.panels?.cost || 0;
-    const installationCost = Math.round((inverterCost + batteryCost + panelCost) * 0.15); // 15% installation
-    
-    return {
-      subtotal: inverterCost + batteryCost + panelCost,
-      installation: installationCost,
-      total: inverterCost + batteryCost + panelCost + installationCost
-    };
-  };
-
-  const totals = calculateTotal();
-
   const handleDownloadPDF = () => {
     // Placeholder for PDF generation
     alert('PDF download feature coming soon!');
   };
 
   const handleShareWhatsApp = () => {
-    const message = `My Solar System Quote from PndaSolar:\n\nInverter: ${data?.inverter?.name}\nBattery: ${data?.battery?.configuration}\nPanels: ${data?.panels?.panels?.quantity}x ${data?.panels?.panels?.model}\n\nTotal: ${formatPrice(totals.total)}\n\nGet your quote at: https://pndasolar.com`;
+    const message = `My Solar System Quote from PndaSolar:\n\nInverter: ${data?.inverter?.model_name}\nBattery: ${data?.battery?.configuration}\nPanels: ${data?.panels?.panels?.recommended_quantity}x ${data?.panels?.panels?.model_name}\n\nTotal: ${formatPrice(quoteData?.total_cost || 0)}\n\nGet your quote at: https://pndasolar.com`;
     const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
     window.open(whatsappUrl, '_blank');
   };
@@ -82,7 +110,7 @@ const ReviewQuote = ({ onBack, data }) => {
                 <div className="space-y-2">
                   <div className="flex justify-between">
                     <span>Inverter:</span>
-                    <span className="font-medium">{data?.inverter?.name}</span>
+                    <span className="font-medium">{data?.inverter?.model_name}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Battery:</span>
@@ -91,7 +119,7 @@ const ReviewQuote = ({ onBack, data }) => {
                   <div className="flex justify-between">
                     <span>Solar Panels:</span>
                     <span className="font-medium">
-                      {data?.panels?.panels?.quantity}x {data?.panels?.panels?.model}
+                      {data?.panels?.panels?.recommended_quantity}x {data?.panels?.panels?.model_name}
                     </span>
                   </div>
                   <div className="flex justify-between">
@@ -114,10 +142,11 @@ const ReviewQuote = ({ onBack, data }) => {
               </p>
               <Button 
                 onClick={mockAdWatch}
+                disabled={loading}
                 className="bg-gradient-to-r from-orange-500 to-yellow-500 hover:from-orange-600 hover:to-yellow-600"
               >
                 <Eye className="w-4 h-4 mr-2" />
-                Watch Ad & Generate Quote
+                {loading ? 'Generating Quote...' : 'Watch Ad & Generate Quote'}
               </Button>
             </CardContent>
           </Card>
@@ -131,43 +160,45 @@ const ReviewQuote = ({ onBack, data }) => {
                 </Badge>
               </div>
               
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <span>{data?.inverter?.name}</span>
-                  <span className="font-medium">{formatPrice(data?.inverter?.cost || 0)}</span>
+              {quoteData && (
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span>{data?.inverter?.model_name}</span>
+                    <span className="font-medium">{formatPrice(quoteData.inverter_cost)}</span>
+                  </div>
+                  
+                  <div className="flex justify-between items-center">
+                    <span>{data?.battery?.configuration} Battery System</span>
+                    <span className="font-medium">{formatPrice(quoteData.battery_cost)}</span>
+                  </div>
+                  
+                  <div className="flex justify-between items-center">
+                    <span>
+                      {data?.panels?.panels?.recommended_quantity}x {data?.panels?.panels?.model_name}
+                    </span>
+                    <span className="font-medium">{formatPrice(quoteData.panel_cost)}</span>
+                  </div>
+                  
+                  <Separator />
+                  
+                  <div className="flex justify-between items-center text-sm text-gray-600">
+                    <span>Subtotal</span>
+                    <span>{formatPrice(quoteData.subtotal)}</span>
+                  </div>
+                  
+                  <div className="flex justify-between items-center text-sm text-gray-600">
+                    <span>Installation & Setup (15%)</span>
+                    <span>{formatPrice(quoteData.installation_cost)}</span>
+                  </div>
+                  
+                  <Separator />
+                  
+                  <div className="flex justify-between items-center text-lg font-bold">
+                    <span>Total Investment</span>
+                    <span className="text-green-600">{formatPrice(quoteData.total_cost)}</span>
+                  </div>
                 </div>
-                
-                <div className="flex justify-between items-center">
-                  <span>{data?.battery?.configuration} Battery System</span>
-                  <span className="font-medium">{formatPrice(data?.battery?.cost || 0)}</span>
-                </div>
-                
-                <div className="flex justify-between items-center">
-                  <span>
-                    {data?.panels?.panels?.quantity}x {data?.panels?.panels?.model}
-                  </span>
-                  <span className="font-medium">{formatPrice(data?.panels?.panels?.cost || 0)}</span>
-                </div>
-                
-                <Separator />
-                
-                <div className="flex justify-between items-center text-sm text-gray-600">
-                  <span>Subtotal</span>
-                  <span>{formatPrice(totals.subtotal)}</span>
-                </div>
-                
-                <div className="flex justify-between items-center text-sm text-gray-600">
-                  <span>Installation & Setup (15%)</span>
-                  <span>{formatPrice(totals.installation)}</span>
-                </div>
-                
-                <Separator />
-                
-                <div className="flex justify-between items-center text-lg font-bold">
-                  <span>Total Investment</span>
-                  <span className="text-green-600">{formatPrice(totals.total)}</span>
-                </div>
-              </div>
+              )}
 
               <div className="grid grid-cols-2 gap-3 mt-6">
                 <Button 

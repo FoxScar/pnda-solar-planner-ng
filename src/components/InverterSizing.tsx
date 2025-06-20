@@ -17,6 +17,18 @@ const InverterSizing = ({ onNext, onBack, data }) => {
 
   const fetchInverters = async () => {
     try {
+      // Calculate total peak load from appliances
+      const totalPowerWatts = calculateTotalPower();
+      
+      // Get inverter recommendation using RPC
+      const { data: recommendedInverter, error: rpcError } = await supabase
+        .rpc('calculate_inverter', { peak_load_watts: totalPowerWatts });
+
+      if (rpcError) {
+        console.error('Error calling calculate_inverter RPC:', rpcError);
+      }
+
+      // Get all available inverters for display
       const { data: inverterData, error } = await supabase
         .from('inverters')
         .select('*')
@@ -28,11 +40,10 @@ const InverterSizing = ({ onNext, onBack, data }) => {
         return;
       }
 
-      // Calculate recommended inverter based on total power from appliances
-      const totalPower = calculateTotalPower();
-      const invertersWithRecommendation = (inverterData || []).map((inverter, index) => ({
+      // Mark the recommended inverter
+      const invertersWithRecommendation = (inverterData || []).map((inverter) => ({
         ...inverter,
-        recommended: index === getRecommendedInverterIndex(inverterData || [], totalPower)
+        recommended: recommendedInverter && inverter.id === recommendedInverter.id
       }));
 
       setInverters(invertersWithRecommendation);
@@ -48,18 +59,6 @@ const InverterSizing = ({ onNext, onBack, data }) => {
     return data.appliances.reduce((total, appliance) => {
       return total + (appliance.power * appliance.quantity);
     }, 0);
-  };
-
-  const getRecommendedInverterIndex = (inverterData, totalPower) => {
-    // Add 20% safety margin and convert to kVA
-    const requiredKva = (totalPower * 1.2) / 1000;
-    
-    // Find the first inverter that can handle the load
-    const recommendedIndex = inverterData.findIndex(inverter => 
-      inverter.kva_rating >= requiredKva
-    );
-    
-    return recommendedIndex === -1 ? 0 : recommendedIndex;
   };
 
   const handleNext = () => {

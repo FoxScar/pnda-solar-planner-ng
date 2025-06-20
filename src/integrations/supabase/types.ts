@@ -161,7 +161,74 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      calculate_battery_system: {
+        Args: {
+          daily_energy_kwh: number
+          preferred_chemistry?: string
+          backup_hours?: number
+        }
+        Returns: {
+          battery_id: string
+          chemistry: string
+          voltage: number
+          capacity_kwh: number
+          recommended_quantity: number
+          total_capacity_kwh: number
+          total_cost: number
+          configuration: string
+          pros: string[]
+        }[]
+      }
+      calculate_complete_system: {
+        Args: { appliances_data: Json; state_name: string; preferences?: Json }
+        Returns: {
+          daily_energy_kwh: number
+          peak_load_watts: number
+          recommended_inverter: Json
+          recommended_battery: Json
+          recommended_panels: Json
+          total_system_cost: number
+        }[]
+      }
+      calculate_panel_system: {
+        Args: {
+          daily_energy_kwh: number
+          state_name: string
+          preferred_panel_model?: string
+        }
+        Returns: {
+          panel_id: string
+          model_name: string
+          rated_power: number
+          recommended_quantity: number
+          total_watts: number
+          total_cost: number
+          daily_generation_kwh: number
+          derating_factor: number
+        }[]
+      }
+      generate_quote_data: {
+        Args: { selected_components: Json }
+        Returns: {
+          inverter_cost: number
+          battery_cost: number
+          panel_cost: number
+          subtotal: number
+          installation_cost: number
+          total_cost: number
+          quote_details: Json
+        }[]
+      }
+      get_appliances_by_category: {
+        Args: { category_filter: string }
+        Returns: {
+          id: string
+          name: string
+          power_rating: number
+          category: string
+          is_energy_efficient: boolean
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never

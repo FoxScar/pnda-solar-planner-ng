@@ -17,28 +17,29 @@ const BatterySizing = ({ onNext, onBack, data }) => {
 
   const fetchBatteries = async () => {
     try {
-      const { data: batteryData, error } = await supabase
-        .from('batteries')
-        .select('*')
-        .eq('available', true)
-        .order('chemistry', { ascending: true })
-        .order('capacity_kwh', { ascending: true });
+      // Calculate daily energy needs
+      const dailyEnergyKwh = calculateEnergyNeeds();
+      
+      // Get battery recommendations using RPC for different chemistries
+      const chemistries = ['Lithium', 'AGM', 'Flooded'];
+      const batteryRecommendations = [];
 
-      if (error) {
-        console.error('Error fetching batteries:', error);
-        return;
+      for (const chemistry of chemistries) {
+        const { data: recommendation, error } = await supabase
+          .rpc('calculate_battery_system', {
+            daily_energy_kwh: dailyEnergyKwh,
+            preferred_chemistry: chemistry
+          });
+
+        if (!error && recommendation && recommendation.length > 0) {
+          batteryRecommendations.push({
+            ...recommendation[0],
+            recommended: chemistry === 'Lithium' // Prefer Lithium
+          });
+        }
       }
 
-      // Calculate recommended battery based on energy needs
-      const energyNeeds = calculateEnergyNeeds();
-      const batteriesWithRecommendation = (batteryData || []).map((battery, index) => ({
-        ...battery,
-        recommended: index === getRecommendedBatteryIndex(batteryData || [], energyNeeds),
-        configuration: getBatteryConfiguration(battery),
-        pros: getBatteryPros(battery.chemistry)
-      }));
-
-      setBatteries(batteriesWithRecommendation);
+      setBatteries(batteryRecommendations);
     } catch (error) {
       console.error('Error:', error);
     } finally {
@@ -52,51 +53,6 @@ const BatterySizing = ({ onNext, onBack, data }) => {
       const dailyEnergyWh = appliance.power * appliance.quantity * appliance.hoursPerDay;
       return total + dailyEnergyWh;
     }, 0) / 1000; // Convert to kWh
-  };
-
-  const getRecommendedBatteryIndex = (batteryData, energyNeeds) => {
-    // Look for lithium batteries first, then find one that can handle the load with some margin
-    const requiredCapacity = energyNeeds * 1.3; // 30% margin
-    
-    const lithiumBatteries = batteryData.filter(b => b.chemistry === 'Lithium');
-    if (lithiumBatteries.length > 0) {
-      const recommendedLithium = lithiumBatteries.find(b => b.capacity_kwh >= requiredCapacity);
-      if (recommendedLithium) {
-        return batteryData.findIndex(b => b.id === recommendedLithium.id);
-      }
-    }
-    
-    // Fallback to any battery that meets requirements
-    const recommendedIndex = batteryData.findIndex(battery => 
-      battery.capacity_kwh >= requiredCapacity
-    );
-    
-    return recommendedIndex === -1 ? 0 : recommendedIndex;
-  };
-
-  const getBatteryConfiguration = (battery) => {
-    const voltage = battery.voltage;
-    const capacity = battery.capacity_kwh;
-    
-    if (battery.chemistry === 'Lithium') {
-      return `${Math.ceil(capacity / 2.4)} × ${capacity <= 2.4 ? '2.4kWh' : '5kWh'} ${battery.chemistry}`;
-    } else {
-      const ahCapacity = Math.round((capacity * 1000) / voltage);
-      return `${Math.ceil(capacity / 1.2)} × ${ahCapacity}Ah ${battery.chemistry}`;
-    }
-  };
-
-  const getBatteryPros = (chemistry) => {
-    switch (chemistry) {
-      case 'Lithium':
-        return ['10+ year lifespan', 'No maintenance', 'Fast charging', '95% efficiency'];
-      case 'AGM':
-        return ['No maintenance', '5-7 year lifespan', 'Reliable', 'Good performance'];
-      case 'Flooded':
-        return ['Lowest upfront cost', 'High capacity', 'Proven technology', 'Repairable'];
-      default:
-        return [];
-    }
   };
 
   const handleNext = () => {
@@ -149,9 +105,9 @@ const BatterySizing = ({ onNext, onBack, data }) => {
         <div className="grid gap-4">
           {batteries.map((battery) => (
             <Card 
-              key={battery.id}
+              key={battery.battery_id}
               className={`cursor-pointer transition-all duration-200 ${
-                selectedBattery?.id === battery.id 
+                selectedBattery?.battery_id === battery.battery_id 
                   ? 'ring-2 ring-blue-500 bg-blue-50' 
                   : 'hover:shadow-md'
               } ${
@@ -172,14 +128,14 @@ const BatterySizing = ({ onNext, onBack, data }) => {
                         Recommended
                       </Badge>
                     )}
-                    {selectedBattery?.id === battery.id && (
+                    {selectedBattery?.battery_id === battery.battery_id && (
                       <CheckCircle className="w-5 h-5 text-green-500" />
                     )}
                   </div>
                   
                   <div className="text-right">
                     <div className="text-xl font-bold text-gray-900">
-                      {formatPrice(battery.unit_cost)}
+                      {formatPrice(battery.total_cost)}
                     </div>
                   </div>
                 </div>
@@ -188,16 +144,12 @@ const BatterySizing = ({ onNext, onBack, data }) => {
                   <h3 className="font-semibold text-lg mb-1">{battery.configuration}</h3>
                   <div className="text-sm space-y-1">
                     <div>
-                      <span className="font-medium">Capacity:</span>
-                      <span className="text-gray-600 ml-1">{battery.capacity_kwh}kWh</span>
+                      <span className="font-medium">Total Capacity:</span>
+                      <span className="text-gray-600 ml-1">{battery.total_capacity_kwh}kWh</span>
                     </div>
                     <div>
-                      <span className="font-medium">Efficiency:</span>
-                      <span className="text-gray-600 ml-1">{(battery.efficiency * 100).toFixed(0)}%</span>
-                    </div>
-                    <div>
-                      <span className="font-medium">Depth of Discharge:</span>
-                      <span className="text-gray-600 ml-1">{(battery.dod * 100).toFixed(0)}%</span>
+                      <span className="font-medium">Quantity:</span>
+                      <span className="text-gray-600 ml-1">{battery.recommended_quantity} units</span>
                     </div>
                   </div>
                 </div>
@@ -222,7 +174,7 @@ const BatterySizing = ({ onNext, onBack, data }) => {
               <p className="text-purple-800 text-sm">
                 Your {selectedBattery.configuration} system will store enough energy to power 
                 your appliances when the sun isn't shining. This setup provides 
-                {selectedBattery.capacity_kwh}kWh of storage capacity, giving you reliable 
+                {selectedBattery.total_capacity_kwh}kWh of storage capacity, giving you reliable 
                 backup power for your home.
               </p>
             </CardContent>

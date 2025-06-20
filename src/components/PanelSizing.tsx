@@ -16,36 +16,30 @@ const PanelSizing = ({ onNext, onBack, data }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchData();
+    fetchSunHours();
   }, []);
 
-  const fetchData = async () => {
-    try {
-      const [panelsResponse, sunHoursResponse] = await Promise.all([
-        supabase.from('panels').select('*').eq('available', true).order('rated_power', { ascending: true }),
-        supabase.from('sun_hours').select('*').order('state', { ascending: true })
-      ]);
+  useEffect(() => {
+    if (selectedState) {
+      fetchPanelRecommendations();
+    }
+  }, [selectedState]);
 
-      if (panelsResponse.error || sunHoursResponse.error) {
-        console.error('Error fetching data:', panelsResponse.error || sunHoursResponse.error);
+  const fetchSunHours = async () => {
+    try {
+      const { data: sunHoursData, error } = await supabase
+        .from('sun_hours')
+        .select('*')
+        .order('state', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching sun hours:', error);
         return;
       }
 
-      // Calculate recommended panels based on energy needs
-      const energyNeeds = calculateEnergyNeeds();
-      const panelsWithRecommendation = (panelsResponse.data || []).map((panel, index) => ({
-        ...panel,
-        recommended: index === getRecommendedPanelIndex(panelsResponse.data || [], energyNeeds),
-        quantity: calculatePanelQuantity(panel, energyNeeds),
-        totalWatts: calculatePanelQuantity(panel, energyNeeds) * panel.rated_power,
-        totalCost: calculatePanelQuantity(panel, energyNeeds) * panel.unit_cost
-      }));
-
-      setPanels(panelsWithRecommendation);
-
-      // Convert sun hours array to object for easy lookup
+      // Convert to object for easy lookup
       const sunHoursMap = {};
-      (sunHoursResponse.data || []).forEach(item => {
+      (sunHoursData || []).forEach(item => {
         sunHoursMap[item.state] = item.hours;
       });
       setSunHours(sunHoursMap);
@@ -56,32 +50,54 @@ const PanelSizing = ({ onNext, onBack, data }) => {
     }
   };
 
+  const fetchPanelRecommendations = async () => {
+    try {
+      // Calculate daily energy needs
+      const dailyEnergyKwh = calculateEnergyNeeds();
+      
+      // Get panel recommendations using RPC for different models
+      const { data: monoRecommendation, error: monoError } = await supabase
+        .rpc('calculate_panel_system', {
+          daily_energy_kwh: dailyEnergyKwh,
+          state_name: selectedState,
+          preferred_panel_model: 'Monocrystalline 400W'
+        });
+
+      const { data: polyRecommendation, error: polyError } = await supabase
+        .rpc('calculate_panel_system', {
+          daily_energy_kwh: dailyEnergyKwh,
+          state_name: selectedState,
+          preferred_panel_model: 'Polycrystalline 400W'
+        });
+
+      const recommendations = [];
+      
+      if (!monoError && monoRecommendation && monoRecommendation.length > 0) {
+        recommendations.push({
+          ...monoRecommendation[0],
+          recommended: true // Prefer monocrystalline
+        });
+      }
+
+      if (!polyError && polyRecommendation && polyRecommendation.length > 0) {
+        recommendations.push({
+          ...polyRecommendation[0],
+          recommended: false
+        });
+      }
+
+      setPanels(recommendations);
+    } catch (error) {
+      console.error('Error fetching panel recommendations:', error);
+    }
+  };
+
   const calculateEnergyNeeds = () => {
     if (!data?.appliances) return 0;
     return data.appliances.reduce((total, appliance) => {
       const dailyEnergyWh = appliance.power * appliance.quantity * appliance.hoursPerDay;
       return total + dailyEnergyWh;
     }, 0) / 1000; // Convert to kWh
-  };
-
-  const calculatePanelQuantity = (panel, energyNeeds) => {
-    const avgSunHours = 5.0; // Use average for calculation
-    const dailyGenerationPerPanel = (panel.rated_power * panel.derating_factor * avgSunHours) / 1000;
-    const requiredQuantity = Math.ceil((energyNeeds * 1.2) / dailyGenerationPerPanel); // 20% safety margin
-    return Math.max(1, requiredQuantity);
-  };
-
-  const getRecommendedPanelIndex = (panelData, energyNeeds) => {
-    // Prefer monocrystalline panels for efficiency
-    const monoPanels = panelData.filter(p => p.model_name.includes('Monocrystalline'));
-    if (monoPanels.length > 0) {
-      // Find the most cost-effective mono panel
-      const costEffectiveIndex = panelData.findIndex(p => 
-        p.model_name.includes('Monocrystalline') && p.rated_power >= 400
-      );
-      if (costEffectiveIndex !== -1) return costEffectiveIndex;
-    }
-    return 0; // Default to first panel
   };
 
   const handleNext = () => {
@@ -106,11 +122,6 @@ const PanelSizing = ({ onNext, onBack, data }) => {
 
   const getSunHours = (state) => {
     return sunHours[state] || 5.0;
-  };
-
-  const calculateDailyGeneration = (panel, state) => {
-    const stateHours = getSunHours(state);
-    return Math.round((panel.totalWatts * panel.derating_factor * stateHours) / 1000);
   };
 
   if (loading) {
@@ -160,16 +171,16 @@ const PanelSizing = ({ onNext, onBack, data }) => {
           )}
         </div>
 
-        {selectedState && (
+        {selectedState && panels.length > 0 && (
           <div className="space-y-4">
             <h3 className="font-semibold text-lg">Recommended Panel Options:</h3>
             
             <div className="grid gap-4">
               {panels.map((panel) => (
                 <Card 
-                  key={panel.id}
+                  key={panel.panel_id}
                   className={`cursor-pointer transition-all duration-200 ${
-                    selectedPanel?.id === panel.id 
+                    selectedPanel?.panel_id === panel.panel_id 
                       ? 'ring-2 ring-yellow-500 bg-yellow-50' 
                       : 'hover:shadow-md'
                   } ${
@@ -188,14 +199,14 @@ const PanelSizing = ({ onNext, onBack, data }) => {
                             Recommended
                           </Badge>
                         )}
-                        {selectedPanel?.id === panel.id && (
+                        {selectedPanel?.panel_id === panel.panel_id && (
                           <CheckCircle className="w-5 h-5 text-green-500" />
                         )}
                       </div>
                       
                       <div className="text-right">
                         <div className="text-xl font-bold text-gray-900">
-                          {formatPrice(panel.totalCost)}
+                          {formatPrice(panel.total_cost)}
                         </div>
                       </div>
                     </div>
@@ -203,11 +214,11 @@ const PanelSizing = ({ onNext, onBack, data }) => {
                     <div className="grid grid-cols-4 gap-4 text-sm">
                       <div>
                         <span className="font-medium block">Quantity:</span>
-                        <span className="text-gray-600">{panel.quantity} panels</span>
+                        <span className="text-gray-600">{panel.recommended_quantity} panels</span>
                       </div>
                       <div>
                         <span className="font-medium block">Total Power:</span>
-                        <span className="text-gray-600">{panel.totalWatts}W</span>
+                        <span className="text-gray-600">{panel.total_watts}W</span>
                       </div>
                       <div>
                         <span className="font-medium block">Unit Power:</span>
@@ -230,10 +241,10 @@ const PanelSizing = ({ onNext, onBack, data }) => {
             <CardContent className="p-4">
               <h4 className="font-medium text-green-900 mb-2">Your Solar Generation</h4>
               <p className="text-green-800 text-sm">
-                With {selectedPanel.quantity} × {selectedPanel.model_name} panels in {selectedState}, 
+                With {selectedPanel.recommended_quantity} × {selectedPanel.model_name} panels in {selectedState}, 
                 you'll generate approximately{' '}
                 <strong>
-                  {calculateDailyGeneration(selectedPanel, selectedState)} kWh
+                  {selectedPanel.daily_generation_kwh} kWh
                 </strong>{' '}
                 of clean energy daily - enough to power your selected appliances and charge your batteries!
               </p>
