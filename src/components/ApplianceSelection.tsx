@@ -23,6 +23,7 @@ const ApplianceSelection = ({ onNext, onBack, data }) => {
 
   const fetchAppliances = async () => {
     try {
+      console.log('Fetching appliances...');
       const { data: appliancesData, error } = await supabase
         .from('appliances')
         .select('*')
@@ -39,7 +40,16 @@ const ApplianceSelection = ({ onNext, onBack, data }) => {
         return;
       }
 
+      console.log('Fetched appliances:', appliancesData);
       setAvailableAppliances(appliancesData || []);
+      
+      if (!appliancesData || appliancesData.length === 0) {
+        toast({
+          title: "No appliances found",
+          description: "No appliances are available in the database.",
+          variant: "destructive"
+        });
+      }
     } catch (error) {
       console.error('Error:', error);
       toast({
@@ -53,32 +63,55 @@ const ApplianceSelection = ({ onNext, onBack, data }) => {
   };
 
   const addAppliance = () => {
-    setAppliances([...appliances, {
+    const newAppliance = {
       id: Date.now(),
       name: '',
-      power: 0,
+      power_rating: 0, // Use consistent property name
       quantity: 1,
       hoursPerDay: 4,
       period: 'both',
       isPeakUsage: false
-    }]);
+    };
+    console.log('Adding new appliance:', newAppliance);
+    setAppliances([...appliances, newAppliance]);
   };
 
   const updateAppliance = (id, field, value) => {
+    console.log(`Updating appliance ${id}: ${field} = ${value}`);
     setAppliances(appliances.map(app => 
       app.id === id ? { ...app, [field]: value } : app
     ));
   };
 
   const removeAppliance = (id) => {
+    console.log('Removing appliance:', id);
     setAppliances(appliances.filter(app => app.id !== id));
   };
 
   const handleApplianceSelect = (id, selectedName) => {
+    console.log(`Selecting appliance for ${id}: ${selectedName}`);
+    
     const selectedAppliance = availableAppliances.find(app => app.name === selectedName);
+    console.log('Found appliance:', selectedAppliance);
+    
     if (selectedAppliance) {
-      updateAppliance(id, 'name', selectedAppliance.name);
-      updateAppliance(id, 'power', selectedAppliance.power_rating);
+      // Update both name and power_rating in a single state update to prevent race conditions
+      setAppliances(appliances.map(app => 
+        app.id === id ? { 
+          ...app, 
+          name: selectedAppliance.name,
+          power_rating: selectedAppliance.power_rating 
+        } : app
+      ));
+      
+      console.log(`Updated appliance ${id} with name: ${selectedAppliance.name}, power: ${selectedAppliance.power_rating}`);
+    } else {
+      console.error('Selected appliance not found:', selectedName);
+      toast({
+        title: "Selection Error",
+        description: "The selected appliance could not be found.",
+        variant: "destructive"
+      });
     }
   };
 
@@ -98,6 +131,7 @@ const ApplianceSelection = ({ onNext, onBack, data }) => {
 
     const invalidAppliances = appliances.filter(app => !app.name || app.quantity <= 0);
     if (invalidAppliances.length > 0) {
+      console.log('Invalid appliances found:', invalidAppliances);
       toast({
         title: "Invalid appliances",
         description: "Please ensure all appliances have a name and quantity greater than 0.",
@@ -106,11 +140,16 @@ const ApplianceSelection = ({ onNext, onBack, data }) => {
       return;
     }
 
-    // Add console log to debug the next step
-    console.log('Calling onNext with appliances:', appliances);
+    // Convert power_rating to power for consistency with what the next component expects
+    const appliancesForNext = appliances.map(app => ({
+      ...app,
+      power: app.power_rating || app.power || 0
+    }));
+
+    console.log('Calling onNext with appliances:', appliancesForNext);
     
     if (typeof onNext === 'function') {
-      onNext(appliances);
+      onNext(appliancesForNext);
     } else {
       console.error('onNext is not a function:', onNext);
       toast({
@@ -127,7 +166,25 @@ const ApplianceSelection = ({ onNext, onBack, data }) => {
     return (
       <Card className="w-full max-w-2xl mx-auto">
         <CardContent className="p-6">
-          <div className="text-center">Loading appliances...</div>
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto mb-4"></div>
+            <p>Loading appliances...</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (availableAppliances.length === 0) {
+    return (
+      <Card className="w-full max-w-2xl mx-auto">
+        <CardContent className="p-6">
+          <div className="text-center">
+            <p className="text-gray-500 mb-4">No appliances available in the database.</p>
+            <Button onClick={fetchAppliances} variant="outline">
+              Retry Loading
+            </Button>
+          </div>
         </CardContent>
       </Card>
     );
@@ -171,13 +228,13 @@ const ApplianceSelection = ({ onNext, onBack, data }) => {
                   <div>
                     <Label htmlFor={`appliance-${appliance.id}`}>Device</Label>
                     <Select 
-                      value={appliance.name}
+                      value={appliance.name || ""}
                       onValueChange={(value) => handleApplianceSelect(appliance.id, value)}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Choose appliance" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="bg-white border border-gray-200 shadow-lg z-50">
                         {availableAppliances.map((item) => (
                           <SelectItem key={item.id} value={item.name}>
                             {item.name} ({item.power_rating}W)
@@ -242,7 +299,7 @@ const ApplianceSelection = ({ onNext, onBack, data }) => {
                       <SelectTrigger>
                         <SelectValue placeholder="Select time" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="bg-white border border-gray-200 shadow-lg z-50">
                         <SelectItem value="day">Day only</SelectItem>
                         <SelectItem value="night">Night only</SelectItem>
                         <SelectItem value="both">Day & Night</SelectItem>
@@ -250,6 +307,14 @@ const ApplianceSelection = ({ onNext, onBack, data }) => {
                     </Select>
                   </div>
                 </div>
+
+                {appliance.name && (
+                  <div className="bg-blue-50 p-3 rounded-md">
+                    <p className="text-sm text-blue-700">
+                      Selected: {appliance.name} - {appliance.power_rating || 0}W
+                    </p>
+                  </div>
+                )}
 
                 <div className="flex items-center space-x-2">
                   <Checkbox
