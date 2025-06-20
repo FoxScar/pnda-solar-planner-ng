@@ -9,11 +9,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Info, Plus, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 const ApplianceSelection = ({ onNext, onBack, data }) => {
   const [appliances, setAppliances] = useState(data?.appliances || []);
   const [availableAppliances, setAvailableAppliances] = useState([]);
   const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
 
   useEffect(() => {
     fetchAppliances();
@@ -29,12 +31,22 @@ const ApplianceSelection = ({ onNext, onBack, data }) => {
 
       if (error) {
         console.error('Error fetching appliances:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load appliances. Please try again.",
+          variant: "destructive"
+        });
         return;
       }
 
       setAvailableAppliances(appliancesData || []);
     } catch (error) {
       console.error('Error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load appliances. Please try again.",
+        variant: "destructive"
+      });
     } finally {
       setLoading(false);
     }
@@ -71,8 +83,41 @@ const ApplianceSelection = ({ onNext, onBack, data }) => {
   };
 
   const handleNext = () => {
-    if (appliances.length > 0 && appliances.every(app => app.name && app.quantity > 0)) {
+    console.log('Next button clicked');
+    console.log('Current appliances:', appliances);
+    console.log('onNext function:', onNext);
+    
+    if (appliances.length === 0) {
+      toast({
+        title: "No appliances selected",
+        description: "Please add at least one appliance to continue.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const invalidAppliances = appliances.filter(app => !app.name || app.quantity <= 0);
+    if (invalidAppliances.length > 0) {
+      toast({
+        title: "Invalid appliances",
+        description: "Please ensure all appliances have a name and quantity greater than 0.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Add console log to debug the next step
+    console.log('Calling onNext with appliances:', appliances);
+    
+    if (typeof onNext === 'function') {
       onNext(appliances);
+    } else {
+      console.error('onNext is not a function:', onNext);
+      toast({
+        title: "Navigation Error",
+        description: "Unable to proceed to next step. Please try again.",
+        variant: "destructive"
+      });
     }
   };
 
@@ -110,7 +155,7 @@ const ApplianceSelection = ({ onNext, onBack, data }) => {
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <Label className="text-sm font-medium">Appliance {index + 1}</Label>
-                  {appliances.length > 1 && (
+                  {appliances.length > 0 && (
                     <Button
                       variant="ghost"
                       size="sm"
@@ -125,7 +170,10 @@ const ApplianceSelection = ({ onNext, onBack, data }) => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor={`appliance-${appliance.id}`}>Device</Label>
-                    <Select onValueChange={(value) => handleApplianceSelect(appliance.id, value)}>
+                    <Select 
+                      value={appliance.name}
+                      onValueChange={(value) => handleApplianceSelect(appliance.id, value)}
+                    >
                       <SelectTrigger>
                         <SelectValue placeholder="Choose appliance" />
                       </SelectTrigger>
@@ -187,7 +235,10 @@ const ApplianceSelection = ({ onNext, onBack, data }) => {
                         </TooltipContent>
                       </Tooltip>
                     </Label>
-                    <Select onValueChange={(value) => updateAppliance(appliance.id, 'period', value)}>
+                    <Select 
+                      value={appliance.period}
+                      onValueChange={(value) => updateAppliance(appliance.id, 'period', value)}
+                    >
                       <SelectTrigger>
                         <SelectValue placeholder="Select time" />
                       </SelectTrigger>
