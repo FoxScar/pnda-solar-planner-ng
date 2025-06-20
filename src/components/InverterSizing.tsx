@@ -20,14 +20,6 @@ const InverterSizing = ({ onNext, onBack, data }) => {
       // Calculate total peak load from appliances
       const totalPowerWatts = calculateTotalPower();
       
-      // Get inverter recommendation using RPC
-      const { data: recommendedInverter, error: rpcError } = await supabase
-        .rpc('calculate_inverter', { peak_load_watts: totalPowerWatts });
-
-      if (rpcError) {
-        console.error('Error calling calculate_inverter RPC:', rpcError);
-      }
-
       // Get all available inverters for display
       const { data: inverterData, error } = await supabase
         .from('inverters')
@@ -39,6 +31,12 @@ const InverterSizing = ({ onNext, onBack, data }) => {
         console.error('Error fetching inverters:', error);
         return;
       }
+
+      // Find recommended inverter based on peak load
+      // Simple recommendation logic: find first inverter that can handle the load with some margin
+      const recommendedInverter = (inverterData || []).find(inverter => 
+        (inverter.kva_rating * 1000 * 0.8) >= totalPowerWatts // 80% derating factor
+      );
 
       // Mark the recommended inverter
       const invertersWithRecommendation = (inverterData || []).map((inverter) => ({
