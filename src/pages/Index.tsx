@@ -3,12 +3,14 @@ import { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { Sun, Zap, Battery, PanelsTopLeft } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Sun, Zap, Battery, PanelsTopLeft, AlertTriangle } from "lucide-react";
 import ApplianceSelection from '@/components/ApplianceSelection';
 import InverterSizing from '@/components/InverterSizing';
 import BatterySizing from '@/components/BatterySizing';
 import PanelSizing from '@/components/PanelSizing';
 import ReviewQuote from '@/components/ReviewQuote';
+import { useToast } from "@/hooks/use-toast";
 
 const Index = () => {
   const [currentStep, setCurrentStep] = useState(0);
@@ -16,6 +18,8 @@ const Index = () => {
   const [inverterData, setInverterData] = useState(null);
   const [batteryData, setBatteryData] = useState(null);
   const [panelData, setPanelData] = useState(null);
+  const [globalError, setGlobalError] = useState(null);
+  const { toast } = useToast();
 
   const steps = [
     { name: 'Appliances', icon: Zap, component: ApplianceSelection },
@@ -25,39 +29,96 @@ const Index = () => {
     { name: 'Review', icon: Sun, component: ReviewQuote }
   ];
 
-  const progress = ((currentStep + 1) / steps.length) * 100;
+  // Calculate progress correctly - exclude welcome screen from calculation
+  const totalSteps = steps.length;
+  const completedSteps = currentStep === 0 ? 0 : currentStep;
+  const progress = (completedSteps / totalSteps) * 100;
 
   const handleNext = (data) => {
-    switch(currentStep) {
-      case 0:
-        setApplianceData(data);
-        break;
-      case 1:
-        setInverterData(data);
-        break;
-      case 2:
-        setBatteryData(data);
-        break;
-      case 3:
-        setPanelData(data);
-        break;
-    }
-    
-    if (currentStep < steps.length - 1) {
-      setCurrentStep(currentStep + 1);
+    try {
+      setGlobalError(null);
+      
+      console.log(`Moving from step ${currentStep} to ${currentStep + 1}`);
+      console.log('Data received:', data);
+
+      switch(currentStep) {
+        case 1: // From ApplianceSelection
+          if (!data || !Array.isArray(data) || data.length === 0) {
+            setGlobalError('Please select at least one appliance before proceeding.');
+            return;
+          }
+          setApplianceData(data);
+          break;
+        case 2: // From InverterSizing
+          if (!data || !data.id) {
+            setGlobalError('Please select an inverter before proceeding.');
+            return;
+          }
+          setInverterData(data);
+          break;
+        case 3: // From BatterySizing
+          if (!data || !data.battery_id) {
+            setGlobalError('Please select a battery system before proceeding.');
+            return;
+          }
+          setBatteryData(data);
+          break;
+        case 4: // From PanelSizing
+          if (!data || !data.panels || !data.state) {
+            setGlobalError('Please select solar panels and specify your location before proceeding.');
+            return;
+          }
+          setPanelData(data);
+          break;
+      }
+      
+      if (currentStep < steps.length) {
+        setCurrentStep(currentStep + 1);
+        toast({
+          title: "Progress Saved",
+          description: `Step ${currentStep} completed successfully.`,
+        });
+      }
+    } catch (error) {
+      console.error('Error in handleNext:', error);
+      setGlobalError('An unexpected error occurred. Please try again.');
+      toast({
+        title: "Error",
+        description: "An error occurred while saving your progress. Please try again.",
+        variant: "destructive"
+      });
     }
   };
 
   const handleBack = () => {
-    if (currentStep > 0) {
-      setCurrentStep(currentStep - 1);
+    try {
+      setGlobalError(null);
+      if (currentStep > 1) {
+        setCurrentStep(currentStep - 1);
+        console.log(`Moving back from step ${currentStep} to ${currentStep - 1}`);
+      }
+    } catch (error) {
+      console.error('Error in handleBack:', error);
+      toast({
+        title: "Navigation Error",
+        description: "An error occurred while navigating back. Please try again.",
+        variant: "destructive"
+      });
     }
   };
 
   const handleStart = () => {
-    setCurrentStep(1);
+    try {
+      setGlobalError(null);
+      setCurrentStep(1);
+      console.log('Starting wizard from welcome screen');
+    } catch (error) {
+      console.error('Error starting wizard:', error);
+      setGlobalError('Unable to start the wizard. Please refresh the page and try again.');
+    }
   };
 
+  // Welcome screen
   if (currentStep === 0) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
@@ -72,6 +133,13 @@ const Index = () => {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
+            {globalError && (
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>{globalError}</AlertDescription>
+              </Alert>
+            )}
+            
             <div className="text-center space-y-4">
               <p className="text-gray-700">
                 Get the perfect solar setup for your Nigerian home. We'll help you choose the right inverter, battery, and panels based on your appliances.
@@ -113,21 +181,39 @@ const Index = () => {
           <div className="flex items-center justify-between mb-4">
             <h1 className="text-xl font-bold text-gray-900">PndaSolar</h1>
             <div className="text-sm text-gray-600">
-              Step {currentStep} of {steps.length - 1}
+              Step {currentStep} of {totalSteps}
             </div>
           </div>
           
           <div className="space-y-2">
             <Progress value={progress} className="h-2" />
             <div className="flex justify-between text-xs text-gray-500">
-              {steps.slice(1).map((step, index) => (
-                <span key={index} className={currentStep > index + 1 ? 'text-green-600 font-medium' : ''}>
+              {steps.map((step, index) => (
+                <span 
+                  key={index} 
+                  className={`${
+                    currentStep > index + 1 
+                      ? 'text-green-600 font-medium' 
+                      : currentStep === index + 1 
+                        ? 'text-orange-600 font-medium' 
+                        : ''
+                  }`}
+                >
                   {step.name}
                 </span>
               ))}
             </div>
           </div>
         </div>
+
+        {globalError && (
+          <div className="mb-6">
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>{globalError}</AlertDescription>
+            </Alert>
+          </div>
+        )}
 
         {/* Current Step Component */}
         <CurrentComponent

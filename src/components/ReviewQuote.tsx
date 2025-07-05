@@ -4,20 +4,25 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import { FileText, Share2, Download, Eye } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { FileText, Share2, Download, Eye, AlertTriangle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 const ReviewQuote = ({ onBack, data }) => {
   const [showQuote, setShowQuote] = useState(false);
   const [adWatched, setAdWatched] = useState(false);
   const [quoteData, setQuoteData] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const { toast } = useToast();
 
   const mockAdWatch = async () => {
-    setAdWatched(true);
-    setLoading(true);
-    
     try {
+      setAdWatched(true);
+      setLoading(true);
+      setError(null);
+      
       // Generate quote data using RPC function
       const selectedComponents = {
         inverter: {
@@ -45,15 +50,38 @@ const ReviewQuote = ({ onBack, data }) => {
 
       if (error) {
         console.error('Error generating quote:', error);
+        setError('Unable to generate your quote. Please try again or contact support.');
+        toast({
+          title: "Quote Generation Failed",
+          description: "There was an error creating your quote. Please try again.",
+          variant: "destructive"
+        });
         return;
       }
 
       if (quoteResult && quoteResult.length > 0) {
         setQuoteData(quoteResult[0]);
         setShowQuote(true);
+        toast({
+          title: "Quote Generated!",
+          description: "Your solar system quote is ready for review.",
+        });
+      } else {
+        setError('Quote data is incomplete. Please go back and ensure all components are selected.');
+        toast({
+          title: "Incomplete Quote",
+          description: "Some component data is missing. Please review your selections.",
+          variant: "destructive"
+        });
       }
     } catch (error) {
-      console.error('Error:', error);
+      console.error('Unexpected error generating quote:', error);
+      setError('An unexpected error occurred while generating your quote.');
+      toast({
+        title: "Connection Error",
+        description: "Please check your internet connection and try again.",
+        variant: "destructive"
+      });
     } finally {
       setLoading(false);
     }
@@ -69,14 +97,36 @@ const ReviewQuote = ({ onBack, data }) => {
 
   const handleDownloadPDF = () => {
     // Placeholder for PDF generation
-    alert('PDF download feature coming soon!');
+    toast({
+      title: "Coming Soon!",
+      description: "PDF download feature will be available in the next update.",
+    });
   };
 
   const handleShareWhatsApp = () => {
-    const message = `My Solar System Quote from PndaSolar:\n\nInverter: ${data?.inverter?.model_name}\nBattery: ${data?.battery?.configuration}\nPanels: ${data?.panels?.panels?.recommended_quantity}x ${data?.panels?.panels?.model_name}\n\nTotal: ${formatPrice(quoteData?.total_cost || 0)}\n\nGet your quote at: https://pndasolar.com`;
-    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
-    window.open(whatsappUrl, '_blank');
+    try {
+      const message = `My Solar System Quote from PndaSolar:\n\nInverter: ${data?.inverter?.model_name}\nBattery: ${data?.battery?.configuration}\nPanels: ${data?.panels?.panels?.recommended_quantity}x ${data?.panels?.panels?.model_name}\n\nTotal: ${formatPrice(quoteData?.total_cost || 0)}\n\nGet your quote at: https://pndasolar.com`;
+      const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+      window.open(whatsappUrl, '_blank');
+    } catch (error) {
+      console.error('Error sharing to WhatsApp:', error);
+      toast({
+        title: "Sharing Error",
+        description: "Unable to share to WhatsApp. Please try again.",
+        variant: "destructive"
+      });
+    }
   };
+
+  const retryQuoteGeneration = () => {
+    setError(null);
+    setAdWatched(false);
+    setShowQuote(false);
+    setQuoteData(null);
+  };
+
+  // Check if we have all required data
+  const hasRequiredData = data?.inverter && data?.battery && data?.panels?.panels && data?.appliances;
 
   return (
     <Card className="w-full max-w-2xl mx-auto">
@@ -88,6 +138,32 @@ const ReviewQuote = ({ onBack, data }) => {
         <p className="text-gray-600">Review your complete solar solution:</p>
       </CardHeader>
       <CardContent className="space-y-6">
+        {!hasRequiredData && (
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              Some component data is missing. Please go back through the steps to ensure all components are properly selected.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {error && (
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              {error}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={retryQuoteGeneration}
+                className="mt-2 ml-2"
+              >
+                Try Again
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* System Overview */}
         <div className="space-y-4">
           <div className="grid gap-4">
@@ -99,7 +175,7 @@ const ReviewQuote = ({ onBack, data }) => {
                     <div key={index} className="text-sm text-gray-600">
                       {appliance.quantity}x {appliance.name} ({appliance.hoursPerDay}h/day)
                     </div>
-                  ))}
+                  )) || <div className="text-sm text-gray-500">No appliances selected</div>}
                 </div>
               </CardContent>
             </Card>
@@ -110,21 +186,21 @@ const ReviewQuote = ({ onBack, data }) => {
                 <div className="space-y-2">
                   <div className="flex justify-between">
                     <span>Inverter:</span>
-                    <span className="font-medium">{data?.inverter?.model_name}</span>
+                    <span className="font-medium">{data?.inverter?.model_name || 'Not selected'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Battery:</span>
-                    <span className="font-medium">{data?.battery?.configuration}</span>
+                    <span className="font-medium">{data?.battery?.configuration || 'Not selected'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Solar Panels:</span>
                     <span className="font-medium">
-                      {data?.panels?.panels?.recommended_quantity}x {data?.panels?.panels?.model_name}
+                      {data?.panels?.panels?.recommended_quantity}x {data?.panels?.panels?.model_name || 'Not selected'}
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span>Location:</span>
-                    <span className="font-medium">{data?.panels?.state}</span>
+                    <span className="font-medium">{data?.panels?.state || 'Not selected'}</span>
                   </div>
                 </div>
               </CardContent>
@@ -142,12 +218,17 @@ const ReviewQuote = ({ onBack, data }) => {
               </p>
               <Button 
                 onClick={mockAdWatch}
-                disabled={loading}
+                disabled={loading || !hasRequiredData}
                 className="bg-gradient-to-r from-orange-500 to-yellow-500 hover:from-orange-600 hover:to-yellow-600"
               >
                 <Eye className="w-4 h-4 mr-2" />
                 {loading ? 'Generating Quote...' : 'Watch Ad & Generate Quote'}
               </Button>
+              {!hasRequiredData && (
+                <p className="text-sm text-gray-600 mt-2">
+                  Please complete all previous steps to generate your quote.
+                </p>
+              )}
             </CardContent>
           </Card>
         ) : (
@@ -212,6 +293,7 @@ const ReviewQuote = ({ onBack, data }) => {
                 <Button 
                   onClick={handleShareWhatsApp}
                   className="flex items-center gap-2 bg-green-600 hover:bg-green-700"
+                  disabled={!quoteData}
                 >
                   <Share2 className="w-4 h-4" />
                   Share on WhatsApp

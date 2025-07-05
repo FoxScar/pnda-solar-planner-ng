@@ -5,8 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle, PanelsTopLeft, Sun } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { CheckCircle, PanelsTopLeft, Sun, AlertTriangle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 const PanelSizing = ({ onNext, onBack, data }) => {
   const [selectedState, setSelectedState] = useState('');
@@ -14,6 +16,9 @@ const PanelSizing = ({ onNext, onBack, data }) => {
   const [panels, setPanels] = useState([]);
   const [sunHours, setSunHours] = useState({});
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [panelsLoading, setPanelsLoading] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
     fetchSunHours();
@@ -27,6 +32,7 @@ const PanelSizing = ({ onNext, onBack, data }) => {
 
   const fetchSunHours = async () => {
     try {
+      setError(null);
       const { data: sunHoursData, error } = await supabase
         .from('sun_hours')
         .select('*')
@@ -34,6 +40,12 @@ const PanelSizing = ({ onNext, onBack, data }) => {
 
       if (error) {
         console.error('Error fetching sun hours:', error);
+        setError('Unable to load solar data for different states. Please try again.');
+        toast({
+          title: "Error",
+          description: "Failed to load solar data. Please refresh the page and try again.",
+          variant: "destructive"
+        });
         return;
       }
 
@@ -44,7 +56,13 @@ const PanelSizing = ({ onNext, onBack, data }) => {
       });
       setSunHours(sunHoursMap);
     } catch (error) {
-      console.error('Error:', error);
+      console.error('Unexpected error:', error);
+      setError('An unexpected error occurred while loading solar data.');
+      toast({
+        title: "Connection Error",
+        description: "Please check your internet connection and try again.",
+        variant: "destructive"
+      });
     } finally {
       setLoading(false);
     }
@@ -52,6 +70,9 @@ const PanelSizing = ({ onNext, onBack, data }) => {
 
   const fetchPanelRecommendations = async () => {
     try {
+      setPanelsLoading(true);
+      setError(null);
+      
       // Calculate daily energy needs
       const dailyEnergyKwh = calculateEnergyNeeds();
       
@@ -70,6 +91,17 @@ const PanelSizing = ({ onNext, onBack, data }) => {
           preferred_panel_model: 'Polycrystalline 400W'
         });
 
+      if (monoError && polyError) {
+        console.error('Panel calculation errors:', { monoError, polyError });
+        setError('Unable to calculate panel recommendations. Please try selecting a different state.');
+        toast({
+          title: "Calculation Error",
+          description: "Unable to generate panel recommendations. Please try again or contact support.",
+          variant: "destructive"
+        });
+        return;
+      }
+
       const recommendations = [];
       
       if (!monoError && monoRecommendation && monoRecommendation.length > 0) {
@@ -86,9 +118,26 @@ const PanelSizing = ({ onNext, onBack, data }) => {
         });
       }
 
-      setPanels(recommendations);
+      if (recommendations.length === 0) {
+        setError('No suitable panel options found for your requirements in this state.');
+        toast({
+          title: "No Recommendations",
+          description: "No suitable panels found for your location. Please try a different state.",
+          variant: "destructive"
+        });
+      } else {
+        setPanels(recommendations);
+      }
     } catch (error) {
       console.error('Error fetching panel recommendations:', error);
+      setError('An error occurred while calculating panel recommendations.');
+      toast({
+        title: "Calculation Error",
+        description: "Unable to calculate panel recommendations. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setPanelsLoading(false);
     }
   };
 
@@ -128,7 +177,28 @@ const PanelSizing = ({ onNext, onBack, data }) => {
     return (
       <Card className="w-full max-w-2xl mx-auto">
         <CardContent className="p-6">
-          <div className="text-center">Loading panels and sun data...</div>
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto mb-4"></div>
+            <p>Loading solar data...</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (error && Object.keys(sunHours).length === 0) {
+    return (
+      <Card className="w-full max-w-2xl mx-auto">
+        <CardContent className="p-6">
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+          <div className="mt-4 text-center">
+            <Button onClick={fetchSunHours} variant="outline">
+              Try Again
+            </Button>
+          </div>
         </CardContent>
       </Card>
     );
@@ -144,9 +214,16 @@ const PanelSizing = ({ onNext, onBack, data }) => {
         <p className="text-gray-600">First, tell us your location to optimize panel recommendations:</p>
       </CardHeader>
       <CardContent className="space-y-6">
+        {error && (
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
         <div>
           <Label htmlFor="state">Your State</Label>
-          <Select onValueChange={setSelectedState}>
+          <Select onValueChange={setSelectedState} disabled={loading}>
             <SelectTrigger>
               <SelectValue placeholder="Select your state" />
             </SelectTrigger>
@@ -171,68 +248,82 @@ const PanelSizing = ({ onNext, onBack, data }) => {
           )}
         </div>
 
-        {selectedState && panels.length > 0 && (
+        {selectedState && (
           <div className="space-y-4">
             <h3 className="font-semibold text-lg">Recommended Panel Options:</h3>
             
-            <div className="grid gap-4">
-              {panels.map((panel) => (
-                <Card 
-                  key={panel.panel_id}
-                  className={`cursor-pointer transition-all duration-200 ${
-                    selectedPanel?.panel_id === panel.panel_id 
-                      ? 'ring-2 ring-yellow-500 bg-yellow-50' 
-                      : 'hover:shadow-md'
-                  } ${
-                    panel.recommended 
-                      ? 'border-green-200 bg-green-50/50' 
-                      : ''
-                  }`}
-                  onClick={() => setSelectedPanel(panel)}
-                >
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-semibold text-lg">{panel.model_name}</h3>
-                        {panel.recommended && (
-                          <Badge className="bg-green-100 text-green-700 border-green-200">
-                            Recommended
-                          </Badge>
-                        )}
-                        {selectedPanel?.panel_id === panel.panel_id && (
-                          <CheckCircle className="w-5 h-5 text-green-500" />
-                        )}
-                      </div>
-                      
-                      <div className="text-right">
-                        <div className="text-xl font-bold text-gray-900">
-                          {formatPrice(panel.total_cost)}
+            {panelsLoading ? (
+              <Card className="p-4">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-orange-500 mx-auto mb-2"></div>
+                  <p className="text-sm text-gray-600">Calculating panel recommendations...</p>
+                </div>
+              </Card>
+            ) : panels.length > 0 ? (
+              <div className="grid gap-4">
+                {panels.map((panel) => (
+                  <Card 
+                    key={panel.panel_id}
+                    className={`cursor-pointer transition-all duration-200 ${
+                      selectedPanel?.panel_id === panel.panel_id 
+                        ? 'ring-2 ring-yellow-500 bg-yellow-50' 
+                        : 'hover:shadow-md'
+                    } ${
+                      panel.recommended 
+                        ? 'border-green-200 bg-green-50/50' 
+                        : ''
+                    }`}
+                    onClick={() => setSelectedPanel(panel)}
+                  >
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-semibold text-lg">{panel.model_name}</h3>
+                          {panel.recommended && (
+                            <Badge className="bg-green-100 text-green-700 border-green-200">
+                              Recommended
+                            </Badge>
+                          )}
+                          {selectedPanel?.panel_id === panel.panel_id && (
+                            <CheckCircle className="w-5 h-5 text-green-500" />
+                          )}
+                        </div>
+                        
+                        <div className="text-right">
+                          <div className="text-xl font-bold text-gray-900">
+                            {formatPrice(panel.total_cost)}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-4 gap-4 text-sm">
-                      <div>
-                        <span className="font-medium block">Quantity:</span>
-                        <span className="text-gray-600">{panel.recommended_quantity} panels</span>
+                      
+                      <div className="grid grid-cols-4 gap-4 text-sm">
+                        <div>
+                          <span className="font-medium block">Quantity:</span>
+                          <span className="text-gray-600">{panel.recommended_quantity} panels</span>
+                        </div>
+                        <div>
+                          <span className="font-medium block">Total Power:</span>
+                          <span className="text-gray-600">{panel.total_watts}W</span>
+                        </div>
+                        <div>
+                          <span className="font-medium block">Unit Power:</span>
+                          <span className="text-gray-600">{panel.rated_power}W</span>
+                        </div>
+                        <div>
+                          <span className="font-medium block">Efficiency:</span>
+                          <span className="text-gray-600">{(panel.derating_factor * 100).toFixed(0)}%</span>
+                        </div>
                       </div>
-                      <div>
-                        <span className="font-medium block">Total Power:</span>
-                        <span className="text-gray-600">{panel.total_watts}W</span>
-                      </div>
-                      <div>
-                        <span className="font-medium block">Unit Power:</span>
-                        <span className="text-gray-600">{panel.rated_power}W</span>
-                      </div>
-                      <div>
-                        <span className="font-medium block">Efficiency:</span>
-                        <span className="text-gray-600">{(panel.derating_factor * 100).toFixed(0)}%</span>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : !panelsLoading && (
+              <Card className="p-4 text-center text-gray-500">
+                <p>No panel recommendations available for this location.</p>
+                <p className="text-sm mt-1">Please try selecting a different state.</p>
+              </Card>
+            )}
           </div>
         )}
 
@@ -258,7 +349,7 @@ const PanelSizing = ({ onNext, onBack, data }) => {
           </Button>
           <Button 
             onClick={handleNext} 
-            disabled={!selectedState || !selectedPanel}
+            disabled={!selectedState || !selectedPanel || panelsLoading}
             className="flex-1 bg-gradient-to-r from-orange-500 to-yellow-500 hover:from-orange-600 hover:to-yellow-600"
           >
             Review Your System
