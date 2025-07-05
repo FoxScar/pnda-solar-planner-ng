@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,11 +7,15 @@ import { FileText, Calendar, Trash2, AlertTriangle, Loader2 } from "lucide-react
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from "@/hooks/use-toast";
+import { Json } from '@/integrations/supabase/types';
 
 interface SavedQuote {
   id: string;
-  quote_data: any;
-  appliances_data: any[];
+  quote_data: Json;
+  appliances_data: Json;
+  inverter_data: Json;
+  battery_data: Json;
+  panel_data: Json;
   total_cost: number;
   created_at: string;
 }
@@ -110,6 +113,32 @@ const SavedQuotes = ({ onBack, onLoadQuote }: {
     });
   };
 
+  const getAppliancesCount = (appliancesData: Json): number => {
+    if (Array.isArray(appliancesData)) {
+      return appliancesData.length;
+    }
+    return 0;
+  };
+
+  const getAppliancesPreview = (appliancesData: Json): string => {
+    if (Array.isArray(appliancesData)) {
+      const names = appliancesData.slice(0, 2).map((app: any) => app.name || 'Unknown').join(', ');
+      if (appliancesData.length > 2) {
+        return `${names} +${appliancesData.length - 2} more`;
+      }
+      return names;
+    }
+    return 'No appliances';
+  };
+
+  const getSystemType = (inverterData: Json): string => {
+    if (typeof inverterData === 'object' && inverterData !== null) {
+      const inverter = inverterData as any;
+      return inverter.model_name?.includes('Hybrid') ? 'Hybrid' : 'Off-Grid';
+    }
+    return 'Unknown';
+  };
+
   if (loading) {
     return (
       <Card className="w-full max-w-4xl mx-auto">
@@ -163,7 +192,7 @@ const SavedQuotes = ({ onBack, onLoadQuote }: {
                       </div>
                       <div className="flex flex-wrap gap-2 mb-2">
                         <Badge variant="outline">
-                          {quote.appliances_data?.length || 0} Appliances
+                          {getAppliancesCount(quote.appliances_data)} Appliances
                         </Badge>
                         <Badge className="bg-green-100 text-green-700">
                           {formatPrice(quote.total_cost)}
@@ -199,14 +228,13 @@ const SavedQuotes = ({ onBack, onLoadQuote }: {
                     <div>
                       <span className="text-gray-500">Appliances:</span>
                       <p className="font-medium">
-                        {quote.appliances_data?.slice(0, 2).map(app => app.name).join(', ')}
-                        {quote.appliances_data?.length > 2 && ` +${quote.appliances_data.length - 2} more`}
+                        {getAppliancesPreview(quote.appliances_data)}
                       </p>
                     </div>
                     <div>
                       <span className="text-gray-500">System Type:</span>
                       <p className="font-medium">
-                        {quote.quote_data?.inverter?.model_name?.includes('Hybrid') ? 'Hybrid' : 'Off-Grid'}
+                        {getSystemType(quote.inverter_data)}
                       </p>
                     </div>
                   </div>
