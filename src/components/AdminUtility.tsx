@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,6 +7,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Shield, UserPlus, LogOut, Mail, Lock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import ApplianceManager from "./admin/ApplianceManager";
+import InverterManager from "./admin/InverterManager";
+import BatteryManager from "./admin/BatteryManager";
+import PanelManager from "./admin/PanelManager";
 
 const AdminUtility = () => {
   const [email, setEmail] = useState('');
@@ -168,7 +171,64 @@ const AdminUtility = () => {
     }
   };
 
-  if (currentUser) {
+  if (currentUser && isAdmin) {
+    return (
+      <Card className="w-full max-w-6xl mx-auto mt-8">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <Shield className="w-5 h-5 text-blue-500" />
+              Admin Panel
+            </CardTitle>
+            <Button 
+              onClick={handleSignOut} 
+              variant="outline" 
+              size="sm"
+              className="flex items-center gap-2"
+            >
+              <LogOut className="w-4 h-4" />
+              Sign Out
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+            <div className="flex items-center gap-2 text-green-700">
+              <Shield className="w-4 h-4" />
+              <span className="font-medium">Logged in as: {currentUser.email}</span>
+            </div>
+          </div>
+
+          <Tabs defaultValue="appliances" className="w-full">
+            <TabsList className="grid w-full grid-cols-4">
+              <TabsTrigger value="appliances">Appliances</TabsTrigger>
+              <TabsTrigger value="inverters">Inverters</TabsTrigger>
+              <TabsTrigger value="batteries">Batteries</TabsTrigger>
+              <TabsTrigger value="panels">Panels</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="appliances" className="mt-6">
+              <ApplianceManager />
+            </TabsContent>
+            
+            <TabsContent value="inverters" className="mt-6">
+              <InverterManager />
+            </TabsContent>
+            
+            <TabsContent value="batteries" className="mt-6">
+              <BatteryManager />
+            </TabsContent>
+            
+            <TabsContent value="panels" className="mt-6">
+              <PanelManager />
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (currentUser && !isAdmin) {
     return (
       <Card className="w-full max-w-2xl mx-auto mt-8">
         <CardHeader>
@@ -205,30 +265,16 @@ const AdminUtility = () => {
             </div>
           </div>
 
-          {!isAdmin && (
-            <div className="space-y-3">
-              <h3 className="font-medium">Make Yourself Admin</h3>
-              <p className="text-sm text-gray-600">
-                Click the button below to assign admin role to your current account:
-              </p>
-              <Button onClick={makeCurrentUserAdmin} className="w-full">
-                <UserPlus className="w-4 h-4 mr-2" />
-                Make Me Admin
-              </Button>
-            </div>
-          )}
-
-          {isAdmin && (
-            <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-              <div className="flex items-center gap-2 text-green-700">
-                <Shield className="w-4 h-4" />
-                <span className="font-medium">You have admin privileges</span>
-              </div>
-              <p className="text-sm text-green-600 mt-1">
-                You can now manage appliances, inverters, batteries, panels, and user roles.
-              </p>
-            </div>
-          )}
+          <div className="space-y-3">
+            <h3 className="font-medium">Make Yourself Admin</h3>
+            <p className="text-sm text-gray-600">
+              Click the button below to assign admin role to your current account:
+            </p>
+            <Button onClick={makeCurrentUserAdmin} className="w-full">
+              <UserPlus className="w-4 h-4 mr-2" />
+              Make Me Admin
+            </Button>
+          </div>
 
           <div className="pt-4 border-t">
             <h3 className="font-medium mb-2">Admin Instructions</h3>
