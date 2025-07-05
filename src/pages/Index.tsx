@@ -1,15 +1,18 @@
 
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Sun, Zap, Battery, PanelsTopLeft, AlertTriangle } from "lucide-react";
+import { Sun, Zap, Battery, PanelsTopLeft, AlertTriangle, User, FileText, LogOut } from "lucide-react";
 import ApplianceSelection from '@/components/ApplianceSelection';
 import InverterSizing from '@/components/InverterSizing';
 import BatterySizing from '@/components/BatterySizing';
 import PanelSizing from '@/components/PanelSizing';
 import ReviewQuote from '@/components/ReviewQuote';
+import SavedQuotes from '@/components/SavedQuotes';
+import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from "@/hooks/use-toast";
 
 const Index = () => {
@@ -19,6 +22,9 @@ const Index = () => {
   const [batteryData, setBatteryData] = useState(null);
   const [panelData, setPanelData] = useState(null);
   const [globalError, setGlobalError] = useState(null);
+  const [showSavedQuotes, setShowSavedQuotes] = useState(false);
+  const { user, signOut, loading } = useAuth();
+  const navigate = useNavigate();
   const { toast } = useToast();
 
   const steps = [
@@ -33,6 +39,43 @@ const Index = () => {
   const totalSteps = steps.length;
   const completedSteps = currentStep === 0 ? 0 : currentStep;
   const progress = (completedSteps / totalSteps) * 100;
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      setCurrentStep(0);
+      setApplianceData([]);
+      setInverterData(null);
+      setBatteryData(null);
+      setPanelData(null);
+      setShowSavedQuotes(false);
+      toast({
+        title: "Signed Out",
+        description: "You have been successfully signed out.",
+      });
+    } catch (error) {
+      console.error('Sign out error:', error);
+      toast({
+        title: "Sign Out Error",
+        description: "There was a problem signing out. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleLoadQuote = (quoteData: any) => {
+    // Load the quote data into the current state
+    setApplianceData(quoteData.appliances_data || []);
+    setInverterData(quoteData.inverter_data || null);
+    setBatteryData(quoteData.battery_data || null);
+    setPanelData(quoteData.panel_data || null);
+    setShowSavedQuotes(false);
+    setCurrentStep(5); // Go to review step
+    toast({
+      title: "Quote Loaded",
+      description: "Your saved quote has been loaded successfully.",
+    });
+  };
 
   const handleNext = (data) => {
     try {
@@ -93,6 +136,10 @@ const Index = () => {
   const handleBack = () => {
     try {
       setGlobalError(null);
+      if (showSavedQuotes) {
+        setShowSavedQuotes(false);
+        return;
+      }
       if (currentStep > 1) {
         setCurrentStep(currentStep - 1);
         console.log(`Moving back from step ${currentStep} to ${currentStep - 1}`);
@@ -117,6 +164,36 @@ const Index = () => {
       setGlobalError('Unable to start the wizard. Please refresh the page and try again.');
     }
   };
+
+  // Show saved quotes if requested
+  if (showSavedQuotes) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50">
+        <div className="container mx-auto px-4 py-6">
+          {/* Header */}
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <h1 className="text-xl font-bold text-gray-900">PndaSolar</h1>
+              {user && (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-600">Welcome, {user.email}</span>
+                  <Button variant="outline" size="sm" onClick={handleSignOut}>
+                    <LogOut className="w-4 h-4 mr-1" />
+                    Sign Out
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <SavedQuotes 
+            onBack={() => setShowSavedQuotes(false)} 
+            onLoadQuote={handleLoadQuote}
+          />
+        </div>
+      </div>
+    );
+  }
 
   // Welcome screen
   if (currentStep === 0) {
@@ -159,6 +236,40 @@ const Index = () => {
                 </div>
               </div>
             </div>
+
+            {/* Authentication Status */}
+            {loading ? (
+              <div className="text-center py-2">
+                <span className="text-sm text-gray-600">Loading...</span>
+              </div>
+            ) : user ? (
+              <div className="space-y-3">
+                <div className="flex items-center justify-center gap-2 text-sm text-green-600">
+                  <User className="w-4 h-4" />
+                  <span>Signed in as {user.email}</span>
+                </div>
+                <Button 
+                  variant="outline"
+                  onClick={() => setShowSavedQuotes(true)}
+                  className="w-full"
+                >
+                  <FileText className="w-4 h-4 mr-2" />
+                  View Saved Quotes
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <Button 
+                  variant="outline"
+                  onClick={() => navigate('/auth')}
+                  className="w-full"
+                >
+                  <User className="w-4 h-4 mr-2" />
+                  Sign In to Save Quotes
+                </Button>
+              </div>
+            )}
+
             <Button 
               onClick={handleStart}
               className="w-full bg-gradient-to-r from-orange-500 to-yellow-500 hover:from-orange-600 hover:to-yellow-600 text-white font-semibold py-3 text-lg"
@@ -180,8 +291,19 @@ const Index = () => {
         <div className="mb-6">
           <div className="flex items-center justify-between mb-4">
             <h1 className="text-xl font-bold text-gray-900">PndaSolar</h1>
-            <div className="text-sm text-gray-600">
-              Step {currentStep} of {totalSteps}
+            <div className="flex items-center gap-4">
+              <div className="text-sm text-gray-600">
+                Step {currentStep} of {totalSteps}
+              </div>
+              {user && (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-600">Welcome, {user.email}</span>
+                  <Button variant="outline" size="sm" onClick={handleSignOut}>
+                    <LogOut className="w-4 h-4 mr-1" />
+                    Sign Out
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
           

@@ -5,8 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { FileText, Share2, Download, Eye, AlertTriangle } from "lucide-react";
+import { FileText, Share2, Download, Eye, AlertTriangle, Save, User } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from '@/contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import { useToast } from "@/hooks/use-toast";
 
 const ReviewQuote = ({ onBack, data }) => {
@@ -14,7 +16,10 @@ const ReviewQuote = ({ onBack, data }) => {
   const [adWatched, setAdWatched] = useState(false);
   const [quoteData, setQuoteData] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+  const { user } = useAuth();
+  const navigate = useNavigate();
   const { toast } = useToast();
 
   const mockAdWatch = async () => {
@@ -84,6 +89,62 @@ const ReviewQuote = ({ onBack, data }) => {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const saveQuote = async () => {
+    if (!user) {
+      toast({
+        title: "Sign In Required",
+        description: "Please sign in to save your quote.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!quoteData) {
+      toast({
+        title: "No Quote to Save",
+        description: "Please generate a quote first.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      setSaving(true);
+
+      const quoteToSave = {
+        user_id: user.id,
+        quote_data: quoteData,
+        appliances_data: data?.appliances || [],
+        inverter_data: data?.inverter || {},
+        battery_data: data?.battery || {},
+        panel_data: data?.panels || {},
+        total_cost: quoteData.total_cost || 0
+      };
+
+      const { error } = await supabase
+        .from('quotes')
+        .insert([quoteToSave]);
+
+      if (error) {
+        throw error;
+      }
+
+      toast({
+        title: "Quote Saved!",
+        description: "Your quote has been saved successfully.",
+      });
+    } catch (error) {
+      console.error('Error saving quote:', error);
+      toast({
+        title: "Save Failed",
+        description: "Unable to save your quote. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -299,6 +360,36 @@ const ReviewQuote = ({ onBack, data }) => {
                   Share on WhatsApp
                 </Button>
               </div>
+
+              {/* Save Quote Section */}
+              {user ? (
+                <div className="mt-4">
+                  <Button 
+                    onClick={saveQuote}
+                    disabled={saving || !quoteData}
+                    className="w-full bg-blue-600 hover:bg-blue-700"
+                  >
+                    <Save className="w-4 h-4 mr-2" />
+                    {saving ? 'Saving Quote...' : 'Save Quote to My Account'}
+                  </Button>
+                </div>
+              ) : (
+                <div className="mt-4">
+                  <Alert>
+                    <User className="h-4 w-4" />
+                    <AlertDescription>
+                      <Button 
+                        variant="link" 
+                        onClick={() => navigate('/auth')}
+                        className="p-0 h-auto text-blue-600"
+                      >
+                        Sign in
+                      </Button>
+                      {' '}to save this quote and access it later.
+                    </AlertDescription>
+                  </Alert>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}

@@ -135,6 +135,45 @@ export type Database = {
         }
         Relationships: []
       }
+      quotes: {
+        Row: {
+          appliances_data: Json
+          battery_data: Json
+          created_at: string
+          id: string
+          inverter_data: Json
+          panel_data: Json
+          quote_data: Json
+          total_cost: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          appliances_data: Json
+          battery_data: Json
+          created_at?: string
+          id?: string
+          inverter_data: Json
+          panel_data: Json
+          quote_data: Json
+          total_cost: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          appliances_data?: Json
+          battery_data?: Json
+          created_at?: string
+          id?: string
+          inverter_data?: Json
+          panel_data?: Json
+          quote_data?: Json
+          total_cost?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       sun_hours: {
         Row: {
           created_at: string
