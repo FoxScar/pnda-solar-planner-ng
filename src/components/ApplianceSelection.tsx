@@ -5,7 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Info, Plus, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -66,11 +65,10 @@ const ApplianceSelection = ({ onNext, onBack, data }) => {
     const newAppliance = {
       id: Date.now(),
       name: '',
-      power_rating: 0, // Use consistent property name
+      power_rating: 0,
       quantity: 1,
       hoursPerDay: 4,
-      period: 'both',
-      isPeakUsage: false
+      period: 'both'
     };
     console.log('Adding new appliance:', newAppliance);
     setAppliances([...appliances, newAppliance]);
@@ -95,7 +93,6 @@ const ApplianceSelection = ({ onNext, onBack, data }) => {
     console.log('Found appliance:', selectedAppliance);
     
     if (selectedAppliance) {
-      // Update both name and power_rating in a single state update to prevent race conditions
       setAppliances(appliances.map(app => 
         app.id === id ? { 
           ...app, 
@@ -140,7 +137,6 @@ const ApplianceSelection = ({ onNext, onBack, data }) => {
       return;
     }
 
-    // Convert power_rating to power for consistency with what the next component expects
     const appliancesForNext = appliances.map(app => ({
       ...app,
       power: app.power_rating || app.power || 0
@@ -237,7 +233,7 @@ const ApplianceSelection = ({ onNext, onBack, data }) => {
                       <SelectContent className="bg-white border border-gray-200 shadow-lg z-50">
                         {availableAppliances.map((item) => (
                           <SelectItem key={item.id} value={item.name}>
-                            {item.name} ({item.power_rating}W)
+                            {item.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -311,29 +307,10 @@ const ApplianceSelection = ({ onNext, onBack, data }) => {
                 {appliance.name && (
                   <div className="bg-blue-50 p-3 rounded-md">
                     <p className="text-sm text-blue-700">
-                      Selected: {appliance.name} - {appliance.power_rating || 0}W
+                      Selected: {appliance.name}
                     </p>
                   </div>
                 )}
-
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id={`peak-${appliance.id}`}
-                    checked={appliance.isPeakUsage}
-                    onCheckedChange={(checked) => updateAppliance(appliance.id, 'isPeakUsage', checked)}
-                  />
-                  <Label htmlFor={`peak-${appliance.id}`} className="text-sm flex items-center gap-1">
-                    Might run during peak usage
-                    <Tooltip>
-                      <TooltipTrigger>
-                        <Info className="w-3 h-3 text-gray-400" />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Check if this appliance might run when many others are also running</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </Label>
-                </div>
               </div>
             </Card>
           ))}
