@@ -1,15 +1,18 @@
-
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle, Battery } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { CheckCircle, Battery, AlertTriangle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 const BatterySizing = ({ onNext, onBack, data }) => {
   const [selectedBattery, setSelectedBattery] = useState(data?.battery || null);
   const [batteries, setBatteries] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const { toast } = useToast();
 
   useEffect(() => {
     fetchBatteries();
@@ -17,44 +20,95 @@ const BatterySizing = ({ onNext, onBack, data }) => {
 
   const fetchBatteries = async () => {
     try {
+      setError(null);
+      
       // Calculate daily energy needs
       const dailyEnergyKwh = calculateEnergyNeeds();
       console.log('Daily energy needs (kWh):', dailyEnergyKwh);
+      
+      if (dailyEnergyKwh <= 0) {
+        setError('No energy requirements found. Please go back and select your appliances.');
+        setLoading(false);
+        return;
+      }
       
       // Get battery recommendations using RPC for different chemistries
       const chemistries = ['Lithium', 'AGM', 'Flooded'];
       const batteryRecommendations = [];
 
       for (const chemistry of chemistries) {
-        const { data: recommendation, error } = await supabase
+        console.log(`Fetching ${chemistry} batteries for ${dailyEnergyKwh} kWh daily energy...`);
+        
+        const { data: recommendation, error: rpcError } = await supabase
           .rpc('calculate_battery_system', {
             daily_energy_kwh: dailyEnergyKwh,
             preferred_chemistry: chemistry
           });
 
-        if (!error && recommendation && recommendation.length > 0) {
+        if (rpcError) {
+          console.error(`Error fetching ${chemistry} batteries:`, rpcError);
+          continue;
+        }
+
+        if (recommendation && recommendation.length > 0) {
+          console.log(`Found ${chemistry} recommendation:`, recommendation[0]);
           batteryRecommendations.push({
             ...recommendation[0],
             recommended: chemistry === 'Lithium' // Prefer Lithium
           });
+        } else {
+          console.log(`No ${chemistry} batteries found for energy requirements`);
         }
       }
 
-      console.log('Battery recommendations:', batteryRecommendations);
-      setBatteries(batteryRecommendations);
+      console.log('All battery recommendations:', batteryRecommendations);
+      
+      if (batteryRecommendations.length === 0) {
+        setError('No suitable battery systems found for your energy requirements. Please contact support.');
+        toast({
+          title: "No Batteries Found",
+          description: "We couldn't find suitable battery systems for your energy needs. Please try reducing your appliance usage or contact support.",
+          variant: "destructive"
+        });
+      } else {
+        setBatteries(batteryRecommendations);
+        toast({
+          title: "Battery Options Loaded",
+          description: `Found ${batteryRecommendations.length} battery system options for your needs.`,
+        });
+      }
     } catch (error) {
-      console.error('Error fetching batteries:', error);
+      console.error('Error in fetchBatteries:', error);
+      setError('Failed to load battery options. Please try again or contact support.');
+      toast({
+        title: "Loading Error",
+        description: "Failed to load battery options. Please try again.",
+        variant: "destructive"
+      });
     } finally {
       setLoading(false);
     }
   };
 
   const calculateEnergyNeeds = () => {
-    if (!data?.appliances) return 0;
-    return data.appliances.reduce((total, appliance) => {
-      const dailyEnergyWh = appliance.power * appliance.quantity * appliance.hoursPerDay;
+    if (!data?.appliances || !Array.isArray(data.appliances)) {
+      console.error('No appliances data found:', data);
+      return 0;
+    }
+    
+    const totalEnergyWh = data.appliances.reduce((total, appliance) => {
+      const power = appliance.power || appliance.power_rating || 0;
+      const quantity = appliance.quantity || 1;
+      const hours = appliance.hoursPerDay || 0;
+      const dailyEnergyWh = power * quantity * hours;
+      
+      console.log(`Appliance: ${appliance.name}, Power: ${power}W, Qty: ${quantity}, Hours: ${hours}, Daily: ${dailyEnergyWh}Wh`);
+      
       return total + dailyEnergyWh;
-    }, 0) / 1000; // Convert to kWh
+    }, 0);
+    
+    console.log(`Total daily energy: ${totalEnergyWh}Wh = ${totalEnergyWh / 1000}kWh`);
+    return totalEnergyWh / 1000; // Convert to kWh
   };
 
   const handleBatterySelect = (battery) => {
@@ -97,6 +151,56 @@ const BatterySizing = ({ onNext, onBack, data }) => {
           <div className="text-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto mb-4"></div>
             <p>Loading battery options...</p>
+            <p className="text-sm text-gray-500 mt-2">Analyzing your energy needs...</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card className="w-full max-w-2xl mx-auto">
+        <CardContent className="p-6">
+          <Alert variant="destructive" className="mb-4">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+          <div className="text-center space-y-4">
+            <Button onClick={fetchBatteries} variant="outline">
+              Try Again
+            </Button>
+            <Button onClick={onBack} variant="ghost">
+              Go Back to Appliances
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (batteries.length === 0) {
+    return (
+      <Card className="w-full max-w-2xl mx-auto">
+        <CardContent className="p-6">
+          <Alert variant="destructive" className="mb-4">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              No battery systems available for your energy requirements.
+            </AlertDescription>
+          </Alert>
+          <div className="text-center space-y-4">
+            <p className="text-gray-600">
+              Daily energy requirement: {calculateEnergyNeeds().toFixed(2)} kWh
+            </p>
+            <div className="space-x-4">
+              <Button onClick={fetchBatteries} variant="outline">
+                Retry Loading
+              </Button>
+              <Button onClick={onBack} variant="ghost">
+                Adjust Appliances
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -110,7 +214,12 @@ const BatterySizing = ({ onNext, onBack, data }) => {
           <Battery className="w-5 h-5 text-blue-500" />
           Choose Your Battery System
         </CardTitle>
-        <p className="text-gray-600">Select the battery type that fits your budget and needs:</p>
+        <p className="text-gray-600">
+          Select the battery type that fits your budget and needs:
+        </p>
+        <div className="text-sm text-blue-600 bg-blue-50 p-2 rounded">
+          Daily energy requirement: {calculateEnergyNeeds().toFixed(2)} kWh
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid gap-4">
