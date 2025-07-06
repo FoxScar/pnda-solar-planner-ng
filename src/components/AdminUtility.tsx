@@ -1,10 +1,11 @@
+
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Shield, UserPlus, LogOut, Mail, Lock } from "lucide-react";
+import { Shield, UserPlus, LogOut, Mail, Lock, AlertTriangle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import ApplianceManager from "./admin/ApplianceManager";
@@ -19,12 +20,14 @@ const AdminUtility = () => {
   const [currentUser, setCurrentUser] = useState(null);
   const [userRoles, setUserRoles] = useState([]);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [needsInitialAdmin, setNeedsInitialAdmin] = useState(false);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('signin');
   const { toast } = useToast();
 
   useEffect(() => {
     checkCurrentUser();
+    checkInitialAdminStatus();
     
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
@@ -46,6 +49,19 @@ const AdminUtility = () => {
     if (session?.user) {
       setCurrentUser(session.user);
       await checkUserRoles(session.user.id);
+    }
+  };
+
+  const checkInitialAdminStatus = async () => {
+    try {
+      const { data, error } = await supabase.rpc('needs_initial_admin');
+      if (error) {
+        console.error('Error checking admin status:', error);
+      } else {
+        setNeedsInitialAdmin(data);
+      }
+    } catch (error) {
+      console.error('Error checking initial admin status:', error);
     }
   };
 
@@ -93,6 +109,8 @@ const AdminUtility = () => {
       setEmail('');
       setPassword('');
       setConfirmPassword('');
+      // Recheck admin status after signup
+      checkInitialAdminStatus();
     }
     setLoading(false);
   };
@@ -139,36 +157,43 @@ const AdminUtility = () => {
     }
   };
 
-  const makeCurrentUserAdmin = async () => {
-    if (currentUser) {
-      const { error } = await supabase
-        .from('user_roles')
-        .insert({
-          user_id: currentUser.id,
-          role: 'admin'
-        });
+  const bootstrapInitialAdmin = async () => {
+    if (!currentUser) return;
+
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.rpc('bootstrap_initial_admin', {
+        target_user_id: currentUser.id
+      });
 
       if (error) {
-        if (error.code === '23505') {
-          toast({
-            title: "Info",
-            description: "You are already an admin",
-          });
-        } else {
-          toast({
-            title: "Error",
-            description: error.message,
-            variant: "destructive"
-          });
-        }
-      } else {
+        toast({
+          title: "Error",
+          description: error.message,
+          variant: "destructive"
+        });
+      } else if (data.success) {
         toast({
           title: "Success",
-          description: "You are now an admin!",
+          description: data.message,
         });
-        checkUserRoles(currentUser.id);
+        await checkUserRoles(currentUser.id);
+        await checkInitialAdminStatus();
+      } else {
+        toast({
+          title: "Error",
+          description: data.error,
+          variant: "destructive"
+        });
       }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to bootstrap admin role",
+        variant: "destructive"
+      });
     }
+    setLoading(false);
   };
 
   if (currentUser && isAdmin) {
@@ -265,24 +290,45 @@ const AdminUtility = () => {
             </div>
           </div>
 
-          <div className="space-y-3">
-            <h3 className="font-medium">Make Yourself Admin</h3>
-            <p className="text-sm text-gray-600">
-              Click the button below to assign admin role to your current account:
-            </p>
-            <Button onClick={makeCurrentUserAdmin} className="w-full">
-              <UserPlus className="w-4 h-4 mr-2" />
-              Make Me Admin
-            </Button>
-          </div>
+          {needsInitialAdmin && (
+            <div className="space-y-3 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <div className="flex items-center gap-2 text-yellow-700">
+                <AlertTriangle className="w-4 h-4" />
+                <h3 className="font-medium">Initial Admin Setup</h3>
+              </div>
+              <p className="text-sm text-yellow-700">
+                No admin users exist in the system. You can bootstrap yourself as the initial admin.
+              </p>
+              <Button 
+                onClick={bootstrapInitialAdmin} 
+                className="w-full"
+                disabled={loading}
+              >
+                <UserPlus className="w-4 h-4 mr-2" />
+                {loading ? "Setting up..." : "Become Initial Admin"}
+              </Button>
+            </div>
+          )}
+
+          {!needsInitialAdmin && (
+            <div className="space-y-3 p-4 bg-red-50 border border-red-200 rounded-lg">
+              <div className="flex items-center gap-2 text-red-700">
+                <Shield className="w-4 h-4" />
+                <h3 className="font-medium">Access Denied</h3>
+              </div>
+              <p className="text-sm text-red-700">
+                You don't have admin privileges. Only existing admins can assign admin roles to other users.
+              </p>
+            </div>
+          )}
 
           <div className="pt-4 border-t">
-            <h3 className="font-medium mb-2">Admin Instructions</h3>
+            <h3 className="font-medium mb-2">Security Information</h3>
             <div className="text-sm text-gray-600 space-y-2">
-              <p>• Admins can perform CRUD operations on all component tables</p>
-              <p>• Public users can still read data for the calculator functionality</p>
-              <p>• To assign admin roles to other users, you'll need their user ID from the auth.users table</p>
-              <p>• Use the Supabase dashboard to manage roles for other users</p>
+              <p>• Admin roles can only be assigned by existing admins</p>
+              <p>• All admin actions are logged and audited</p>
+              <p>• Contact an existing admin to request admin privileges</p>
+              <p>• System prevents unauthorized privilege escalation</p>
             </div>
           </div>
         </CardContent>
@@ -404,7 +450,7 @@ const AdminUtility = () => {
         
         <div className="mt-6 pt-4 border-t">
           <p className="text-xs text-gray-500 text-center">
-            Admin access only. Use your email and password to authenticate.
+            Secure admin access with audit logging and role-based permissions.
           </p>
         </div>
       </CardContent>

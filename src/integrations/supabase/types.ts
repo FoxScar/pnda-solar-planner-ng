@@ -9,6 +9,39 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      admin_audit_log: {
+        Row: {
+          action: string
+          assigned_by: string | null
+          created_at: string
+          id: string
+          ip_address: unknown | null
+          role_assigned: string
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          action: string
+          assigned_by?: string | null
+          created_at?: string
+          id?: string
+          ip_address?: unknown | null
+          role_assigned: string
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          action?: string
+          assigned_by?: string | null
+          created_at?: string
+          id?: string
+          ip_address?: unknown | null
+          role_assigned?: string
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       appliances: {
         Row: {
           category: string
@@ -221,6 +254,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      assign_admin_role: {
+        Args: { target_user_id: string }
+        Returns: Json
+      }
+      bootstrap_initial_admin: {
+        Args: { target_user_id: string; bootstrap_key?: string }
+        Returns: Json
+      }
       calculate_battery_system: {
         Args: {
           daily_energy_kwh: number
@@ -294,6 +335,10 @@ export type Database = {
           _user_id: string
           _role: Database["public"]["Enums"]["app_role"]
         }
+        Returns: boolean
+      }
+      needs_initial_admin: {
+        Args: Record<PropertyKey, never>
         Returns: boolean
       }
     }
