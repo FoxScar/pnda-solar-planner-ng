@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { CheckCircle, PanelsTopLeft, Sun, AlertTriangle } from "lucide-react";
+import { CheckCircle, PanelsTopLeft, Sun, AlertTriangle, Info } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -18,6 +18,7 @@ const PanelSizing = ({ onNext, onBack, data }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [panelsLoading, setPanelsLoading] = useState(false);
+  const [debugInfo, setDebugInfo] = useState(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -33,6 +34,8 @@ const PanelSizing = ({ onNext, onBack, data }) => {
   const fetchSunHours = async () => {
     try {
       setError(null);
+      console.log('Fetching sun hours data...');
+      
       const { data: sunHoursData, error } = await supabase
         .from('sun_hours')
         .select('*')
@@ -49,6 +52,8 @@ const PanelSizing = ({ onNext, onBack, data }) => {
         return;
       }
 
+      console.log('Sun hours data loaded:', sunHoursData?.length || 0, 'states');
+      
       // Convert to object for easy lookup
       const sunHoursMap = {};
       (sunHoursData || []).forEach(item => {
@@ -72,9 +77,22 @@ const PanelSizing = ({ onNext, onBack, data }) => {
     try {
       setPanelsLoading(true);
       setError(null);
+      setDebugInfo(null);
       
       // Calculate daily energy needs
       const dailyEnergyKwh = calculateEnergyNeeds();
+      console.log('Calculating panel recommendations for:', {
+        dailyEnergyKwh,
+        selectedState,
+        sunHours: sunHours[selectedState]
+      });
+
+      setDebugInfo({
+        dailyEnergyKwh,
+        selectedState,
+        sunHours: sunHours[selectedState],
+        appliancesCount: data?.appliances?.length || 0
+      });
       
       // Get panel recommendations using RPC for different models
       const { data: monoRecommendation, error: monoError } = await supabase
@@ -91,9 +109,16 @@ const PanelSizing = ({ onNext, onBack, data }) => {
           preferred_panel_model: 'Polycrystalline 400W'
         });
 
+      console.log('Panel calculation results:', {
+        monoRecommendation,
+        monoError,
+        polyRecommendation,
+        polyError
+      });
+
       if (monoError && polyError) {
         console.error('Panel calculation errors:', { monoError, polyError });
-        setError('Unable to calculate panel recommendations. Please try selecting a different state.');
+        setError(`Unable to calculate panel recommendations: ${monoError?.message || polyError?.message}`);
         toast({
           title: "Calculation Error",
           description: "Unable to generate panel recommendations. Please try again or contact support.",
@@ -118,19 +143,25 @@ const PanelSizing = ({ onNext, onBack, data }) => {
         });
       }
 
+      console.log('Final recommendations:', recommendations);
+
       if (recommendations.length === 0) {
-        setError('No suitable panel options found for your requirements in this state.');
+        setError('No suitable panel options found for your requirements in this state. This may be due to insufficient panel data or very low energy requirements.');
         toast({
           title: "No Recommendations",
-          description: "No suitable panels found for your location. Please try a different state.",
+          description: "No suitable panels found for your location. Please try a different state or check your appliance selection.",
           variant: "destructive"
         });
       } else {
         setPanels(recommendations);
+        toast({
+          title: "Success",
+          description: `Found ${recommendations.length} panel recommendation${recommendations.length > 1 ? 's' : ''} for ${selectedState}`,
+        });
       }
     } catch (error) {
       console.error('Error fetching panel recommendations:', error);
-      setError('An error occurred while calculating panel recommendations.');
+      setError(`An error occurred while calculating panel recommendations: ${error.message}`);
       toast({
         title: "Calculation Error",
         description: "Unable to calculate panel recommendations. Please try again.",
@@ -218,6 +249,19 @@ const PanelSizing = ({ onNext, onBack, data }) => {
           <Alert variant="destructive">
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
+        {debugInfo && (
+          <Alert>
+            <Info className="h-4 w-4" />
+            <AlertDescription>
+              <div className="text-sm">
+                <strong>System Requirements:</strong> {debugInfo.dailyEnergyKwh.toFixed(2)} kWh/day 
+                from {debugInfo.appliancesCount} appliances in {debugInfo.selectedState} 
+                ({debugInfo.sunHours} sun hours/day)
+              </div>
+            </AlertDescription>
           </Alert>
         )}
 
@@ -321,7 +365,7 @@ const PanelSizing = ({ onNext, onBack, data }) => {
             ) : !panelsLoading && (
               <Card className="p-4 text-center text-gray-500">
                 <p>No panel recommendations available for this location.</p>
-                <p className="text-sm mt-1">Please try selecting a different state.</p>
+                <p className="text-sm mt-1">Please try selecting a different state or check your appliance selection.</p>
               </Card>
             )}
           </div>
