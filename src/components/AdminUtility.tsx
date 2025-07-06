@@ -13,8 +13,8 @@ import BatteryManager from "./admin/BatteryManager";
 import PanelManager from "./admin/PanelManager";
 
 // Type definitions for database function responses
-interface BootstrapResponse {
-  success: boolean;
+interface AdminRPCResponse {
+  success?: boolean;
   message?: string;
   error?: string;
   user_id?: string;
@@ -181,18 +181,27 @@ const AdminUtility = () => {
           variant: "destructive"
         });
       } else {
-        const response = data as BootstrapResponse;
-        if (response.success) {
-          toast({
-            title: "Success",
-            description: response.message,
-          });
-          await checkUserRoles(currentUser.id);
-          await checkInitialAdminStatus();
+        // Properly handle the RPC response with type safety
+        if (typeof data === 'object' && data !== null) {
+          const result = data as AdminRPCResponse;
+          if (result.success) {
+            toast({
+              title: "Success",
+              description: result.message || "Admin role successfully assigned",
+            });
+            await checkUserRoles(currentUser.id);
+            await checkInitialAdminStatus();
+          } else {
+            toast({
+              title: "Error",
+              description: result.error || "Failed to bootstrap admin role",
+              variant: "destructive"
+            });
+          }
         } else {
           toast({
             title: "Error",
-            description: response.error,
+            description: "Unexpected response format",
             variant: "destructive"
           });
         }
