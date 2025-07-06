@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,6 +11,15 @@ import ApplianceManager from "./admin/ApplianceManager";
 import InverterManager from "./admin/InverterManager";
 import BatteryManager from "./admin/BatteryManager";
 import PanelManager from "./admin/PanelManager";
+
+// Type definitions for database function responses
+interface BootstrapResponse {
+  success: boolean;
+  message?: string;
+  error?: string;
+  user_id?: string;
+  admin_count?: number;
+}
 
 const AdminUtility = () => {
   const [email, setEmail] = useState('');
@@ -172,19 +180,22 @@ const AdminUtility = () => {
           description: error.message,
           variant: "destructive"
         });
-      } else if (data.success) {
-        toast({
-          title: "Success",
-          description: data.message,
-        });
-        await checkUserRoles(currentUser.id);
-        await checkInitialAdminStatus();
       } else {
-        toast({
-          title: "Error",
-          description: data.error,
-          variant: "destructive"
-        });
+        const response = data as BootstrapResponse;
+        if (response.success) {
+          toast({
+            title: "Success",
+            description: response.message,
+          });
+          await checkUserRoles(currentUser.id);
+          await checkInitialAdminStatus();
+        } else {
+          toast({
+            title: "Error",
+            description: response.error,
+            variant: "destructive"
+          });
+        }
       }
     } catch (error) {
       toast({
