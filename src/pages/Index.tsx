@@ -206,7 +206,7 @@ const Index = () => {
               alt="P'NDA SOLAR Logo"
               className="w-32 h-20 mx-auto mb-4 object-contain"
             />
-            <CardTitle className="text-2xl font-bold text-gray-900">P'NDA SOLAR</CardTitle>
+            
             <CardDescription className="text-lg text-gray-600">
               Size Your Solar System in Minutes
             </CardDescription>
