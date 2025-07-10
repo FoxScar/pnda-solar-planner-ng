@@ -173,7 +173,7 @@ const Index = () => {
           {/* Header */}
           <div className="mb-6">
             <div className="flex items-center justify-between mb-4">
-              <h1 className="text-xl font-bold text-gray-900">PndaSolar</h1>
+              <h1 className="text-xl font-bold text-gray-900">P'NDA SOLAR</h1>
               {user && (
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-gray-600">Welcome, {user.email}</span>
@@ -201,10 +201,12 @@ const Index = () => {
       <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 flex items-center justify-center p-4">
         <Card className="w-full max-w-md mx-auto shadow-lg">
           <CardHeader className="text-center pb-2">
-            <div className="w-20 h-20 mx-auto mb-4 bg-gradient-to-br from-orange-400 to-yellow-500 rounded-full flex items-center justify-center">
-              <Sun className="w-10 h-10 text-white" />
-            </div>
-            <CardTitle className="text-2xl font-bold text-gray-900">PndaSolar</CardTitle>
+            <img 
+              src="/lovable-uploads/2942a0a7-1b32-447f-89c5-614f9200a19c.png" 
+              alt="P'NDA SOLAR Logo"
+              className="w-32 h-20 mx-auto mb-4 object-contain"
+            />
+            <CardTitle className="text-2xl font-bold text-gray-900">P'NDA SOLAR</CardTitle>
             <CardDescription className="text-lg text-gray-600">
               Size Your Solar System in Minutes
             </CardDescription>
@@ -290,7 +292,7 @@ const Index = () => {
         {/* Header with Progress */}
         <div className="mb-6">
           <div className="flex items-center justify-between mb-4">
-            <h1 className="text-xl font-bold text-gray-900">PndaSolar</h1>
+            <h1 className="text-xl font-bold text-gray-900">P'NDA SOLAR</h1>
             <div className="flex items-center gap-4">
               <div className="text-sm text-gray-600">
                 Step {currentStep} of {totalSteps}
