@@ -14,7 +14,7 @@ import ReviewQuote from '@/components/ReviewQuote';
 import SavedQuotes from '@/components/SavedQuotes';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from "@/hooks/use-toast";
-import pndaSolarLogo from '@/assets/pnda-solar-logo.png';
+import pndaSolarLogo from '@/assets/pnda-solar-simple-logo.png';
 
 const Index = () => {
   const [currentStep, setCurrentStep] = useState(0);
