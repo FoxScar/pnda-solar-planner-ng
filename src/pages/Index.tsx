@@ -14,6 +14,7 @@ import ReviewQuote from '@/components/ReviewQuote';
 import SavedQuotes from '@/components/SavedQuotes';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from "@/hooks/use-toast";
+import pndaSolarLogo from '@/assets/pnda-solar-logo.png';
 
 const Index = () => {
   const [currentStep, setCurrentStep] = useState(0);
@@ -202,13 +203,9 @@ const Index = () => {
         <Card className="w-full max-w-md mx-auto shadow-lg">
           <CardHeader className="text-center pb-2">
             <img 
-              src="https://cdn.lovable.dev/uploads/2942a0a7-1b32-447f-89c5-614f9200a19c.png" 
+              src={pndaSolarLogo} 
               alt="P'NDA SOLAR Logo"
               className="w-32 h-20 mx-auto mb-4 object-contain"
-              onError={(e) => {
-                console.error('Logo image failed to load');
-                e.currentTarget.style.display = 'none';
-              }}
             />
             
             <CardDescription className="text-lg text-gray-600">
