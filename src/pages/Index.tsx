@@ -202,9 +202,13 @@ const Index = () => {
         <Card className="w-full max-w-md mx-auto shadow-lg">
           <CardHeader className="text-center pb-2">
             <img 
-              src="/lovable-uploads/2942a0a7-1b32-447f-89c5-614f9200a19c.png" 
+              src="https://cdn.lovable.dev/uploads/2942a0a7-1b32-447f-89c5-614f9200a19c.png" 
               alt="P'NDA SOLAR Logo"
               className="w-32 h-20 mx-auto mb-4 object-contain"
+              onError={(e) => {
+                console.error('Logo image failed to load');
+                e.currentTarget.style.display = 'none';
+              }}
             />
             
             <CardDescription className="text-lg text-gray-600">
