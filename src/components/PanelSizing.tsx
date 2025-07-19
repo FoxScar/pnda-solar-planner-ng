@@ -94,31 +94,30 @@ const PanelSizing = ({ onNext, onBack, data }) => {
         appliancesCount: data?.appliances?.length || 0
       });
       
-      // Get panel recommendations using RPC for different models
-      const { data: monoRecommendation, error: monoError } = await supabase
+      // Use new panel calculation with separated day/night loads
+      const daytimeLoad = data?.daytimeLoad || 0;
+      const nightEnergy = data?.nightEnergy || dailyEnergyKwh;
+      
+      console.log('Panel calculation inputs:', { daytimeLoad, nightEnergy, selectedState });
+      
+      // Get panel recommendations using new RPC function
+      const { data: panelRecommendation, error: panelError } = await supabase
         .rpc('calculate_panel_system', {
-          daily_energy_kwh: dailyEnergyKwh,
+          daytime_load_watts: daytimeLoad,
+          night_energy_kwh: nightEnergy,
           state_name: selectedState,
-          preferred_panel_model: 'Monocrystalline 400W'
-        });
-
-      const { data: polyRecommendation, error: polyError } = await supabase
-        .rpc('calculate_panel_system', {
-          daily_energy_kwh: dailyEnergyKwh,
-          state_name: selectedState,
-          preferred_panel_model: 'Polycrystalline 400W'
+          sun_hours_per_day: sunHours[selectedState] || 5.0,
+          preferred_panel_model: null // Let it choose the best option
         });
 
       console.log('Panel calculation results:', {
-        monoRecommendation,
-        monoError,
-        polyRecommendation,
-        polyError
+        panelRecommendation,
+        panelError
       });
 
-      if (monoError && polyError) {
-        console.error('Panel calculation errors:', { monoError, polyError });
-        setError(`Unable to calculate panel recommendations: ${monoError?.message || polyError?.message}`);
+      if (panelError) {
+        console.error('Panel calculation error:', panelError);
+        setError(`Unable to calculate panel recommendations: ${panelError?.message}`);
         toast({
           title: "Calculation Error",
           description: "Unable to generate panel recommendations. Please try again or contact support.",
@@ -129,17 +128,10 @@ const PanelSizing = ({ onNext, onBack, data }) => {
 
       const recommendations = [];
       
-      if (!monoError && monoRecommendation && monoRecommendation.length > 0) {
+      if (panelRecommendation && panelRecommendation.length > 0) {
         recommendations.push({
-          ...monoRecommendation[0],
-          recommended: true // Prefer monocrystalline
-        });
-      }
-
-      if (!polyError && polyRecommendation && polyRecommendation.length > 0) {
-        recommendations.push({
-          ...polyRecommendation[0],
-          recommended: false
+          ...panelRecommendation[0],
+          recommended: true
         });
       }
 
@@ -173,6 +165,10 @@ const PanelSizing = ({ onNext, onBack, data }) => {
   };
 
   const calculateEnergyNeeds = () => {
+    if (data?.nightEnergy !== undefined) {
+      return data.nightEnergy;
+    }
+    
     if (!data?.appliances) return 0;
     return data.appliances.reduce((total, appliance) => {
       const dailyEnergyWh = appliance.power * appliance.quantity * appliance.hoursPerDay;
@@ -256,10 +252,12 @@ const PanelSizing = ({ onNext, onBack, data }) => {
           <Alert>
             <Info className="h-4 w-4" />
             <AlertDescription>
-              <div className="text-sm">
-                <strong>System Requirements:</strong> {debugInfo.dailyEnergyKwh.toFixed(2)} kWh/day 
-                from {debugInfo.appliancesCount} appliances in {debugInfo.selectedState} 
-                ({debugInfo.sunHours} sun hours/day)
+              <div className="text-sm space-y-1">
+                <div><strong>Daytime Load:</strong> {data?.daytimeLoad || 0}W</div>
+                <div><strong>Night Energy:</strong> {debugInfo.dailyEnergyKwh.toFixed(2)} kWh</div>
+                <div><strong>Location:</strong> {debugInfo.selectedState} ({debugInfo.sunHours} sun hours/day)</div>
+                <div><strong>Battery Charging:</strong> {(debugInfo.dailyEnergyKwh * 1000 / debugInfo.sunHours).toFixed(0)}W</div>
+                <div><strong>Total Panel Requirement:</strong> {((data?.daytimeLoad || 0) + (debugInfo.dailyEnergyKwh * 1000 / debugInfo.sunHours)).toFixed(0)}W</div>
               </div>
             </AlertDescription>
           </Alert>
@@ -374,15 +372,15 @@ const PanelSizing = ({ onNext, onBack, data }) => {
         {selectedPanel && selectedState && (
           <Card className="bg-green-50 border-green-200">
             <CardContent className="p-4">
-              <h4 className="font-medium text-green-900 mb-2">Your Solar Generation</h4>
-              <p className="text-green-800 text-sm">
-                With {selectedPanel.recommended_quantity} × {selectedPanel.model_name} panels in {selectedState}, 
-                you'll generate approximately{' '}
-                <strong>
-                  {selectedPanel.daily_generation_kwh} kWh
-                </strong>{' '}
-                of clean energy daily - enough to power your selected appliances and charge your batteries!
-              </p>
+              <h4 className="font-medium text-green-900 mb-2">Panel Calculation</h4>
+              <div className="text-green-800 text-sm space-y-1">
+                <p><strong>Daytime Load:</strong> {data?.daytimeLoad || 0}W</p>
+                <p><strong>Battery Charging:</strong> {((data?.nightEnergy || 0) * 1000 / (sunHours[selectedState] || 5)).toFixed(0)}W</p>
+                <p><strong>Total Requirement:</strong> {((data?.daytimeLoad || 0) + ((data?.nightEnergy || 0) * 1000 / (sunHours[selectedState] || 5))).toFixed(0)}W</p>
+                <p><strong>Derating Factor:</strong> 80% (accounting for losses)</p>
+                <p><strong>System Losses:</strong> Inverter (90%) + Wiring (95%)</p>
+                <p>Result: {selectedPanel.recommended_quantity} × {selectedPanel.rated_power}W panels generating <strong>{selectedPanel.daily_generation_kwh} kWh/day</strong></p>
+              </div>
             </CardContent>
           </Card>
         )}

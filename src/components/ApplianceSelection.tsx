@@ -115,7 +115,6 @@ const ApplianceSelection = ({ onNext, onBack, data }) => {
   const handleNext = () => {
     console.log('Next button clicked');
     console.log('Current appliances:', appliances);
-    console.log('onNext function:', onNext);
     
     if (appliances.length === 0) {
       toast({
@@ -137,15 +136,37 @@ const ApplianceSelection = ({ onNext, onBack, data }) => {
       return;
     }
 
+    // Calculate loads properly for new system
     const appliancesForNext = appliances.map(app => ({
       ...app,
       power: app.power_rating || app.power || 0
     }));
 
-    console.log('Calling onNext with appliances:', appliancesForNext);
+    // Calculate totals for transparent display
+    const daytimeLoad = appliancesForNext
+      .filter(app => app.period === 'day' || app.period === 'both')
+      .reduce((total, app) => total + (app.power * app.quantity), 0);
+    
+    const nighttimeLoad = appliancesForNext
+      .filter(app => app.period === 'night' || app.period === 'both')
+      .reduce((total, app) => total + (app.power * app.quantity), 0);
+
+    const nightEnergy = appliancesForNext
+      .filter(app => app.period === 'night' || app.period === 'both')
+      .reduce((total, app) => {
+        const nightHours = app.period === 'both' ? app.hoursPerDay / 2 : app.hoursPerDay;
+        return total + (app.power * app.quantity * nightHours);
+      }, 0) / 1000; // Convert to kWh
+
+    console.log('Calculated loads:', { daytimeLoad, nighttimeLoad, nightEnergy });
     
     if (typeof onNext === 'function') {
-      onNext(appliancesForNext);
+      onNext({
+        appliances: appliancesForNext,
+        daytimeLoad,
+        nighttimeLoad,
+        nightEnergy
+      });
     } else {
       console.error('onNext is not a function:', onNext);
       toast({

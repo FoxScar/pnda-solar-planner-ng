@@ -41,8 +41,9 @@ const BatterySizing = ({ onNext, onBack, data }) => {
         
         const { data: recommendation, error: rpcError } = await supabase
           .rpc('calculate_battery_system', {
-            daily_energy_kwh: dailyEnergyKwh,
-            preferred_chemistry: chemistry
+            night_energy_kwh: data?.nightEnergy || dailyEnergyKwh,
+            preferred_chemistry: chemistry,
+            night_duration_hours: 13
           });
 
         if (rpcError) {
@@ -91,24 +92,38 @@ const BatterySizing = ({ onNext, onBack, data }) => {
   };
 
   const calculateEnergyNeeds = () => {
+    // Use night energy from the corrected calculation
+    if (data?.nightEnergy !== undefined) {
+      console.log('Using night energy from calculation:', data.nightEnergy);
+      return data.nightEnergy;
+    }
+    
+    // Fallback calculation for night load only
     if (!data?.appliances || !Array.isArray(data.appliances)) {
       console.error('No appliances data found:', data);
       return 0;
     }
     
-    const totalEnergyWh = data.appliances.reduce((total, appliance) => {
+    const nightEnergyWh = data.appliances.reduce((total, appliance) => {
       const power = appliance.power || appliance.power_rating || 0;
       const quantity = appliance.quantity || 1;
       const hours = appliance.hoursPerDay || 0;
-      const dailyEnergyWh = power * quantity * hours;
       
-      console.log(`Appliance: ${appliance.name}, Power: ${power}W, Qty: ${quantity}, Hours: ${hours}, Daily: ${dailyEnergyWh}Wh`);
+      // Only calculate for night or both periods
+      if (appliance.period === 'night' || appliance.period === 'both') {
+        const nightHours = appliance.period === 'both' ? hours / 2 : hours;
+        const nightEnergyWh = power * quantity * nightHours;
+        
+        console.log(`Night appliance: ${appliance.name}, Power: ${power}W, Qty: ${quantity}, Hours: ${nightHours}, Night Energy: ${nightEnergyWh}Wh`);
+        
+        return total + nightEnergyWh;
+      }
       
-      return total + dailyEnergyWh;
+      return total;
     }, 0);
     
-    console.log(`Total daily energy: ${totalEnergyWh}Wh = ${totalEnergyWh / 1000}kWh`);
-    return totalEnergyWh / 1000; // Convert to kWh
+    console.log(`Total night energy: ${nightEnergyWh}Wh = ${nightEnergyWh / 1000}kWh`);
+    return nightEnergyWh / 1000; // Convert to kWh
   };
 
   const handleBatterySelect = (battery) => {
@@ -191,7 +206,7 @@ const BatterySizing = ({ onNext, onBack, data }) => {
           </Alert>
           <div className="text-center space-y-4">
             <p className="text-gray-600">
-              Daily energy requirement: {calculateEnergyNeeds().toFixed(2)} kWh
+              Night energy requirement: {calculateEnergyNeeds().toFixed(2)} kWh
             </p>
             <div className="space-x-4">
               <Button onClick={fetchBatteries} variant="outline">
@@ -218,7 +233,7 @@ const BatterySizing = ({ onNext, onBack, data }) => {
           Select the battery type that fits your budget and needs:
         </p>
         <div className="text-sm text-blue-600 bg-blue-50 p-2 rounded">
-          Daily energy requirement: {calculateEnergyNeeds().toFixed(2)} kWh
+          Night energy requirement: {calculateEnergyNeeds().toFixed(2)} kWh (13 hours: 6 PM - 7 AM)
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -290,13 +305,14 @@ const BatterySizing = ({ onNext, onBack, data }) => {
         {selectedBattery && (
           <Card className="bg-purple-50 border-purple-200">
             <CardContent className="p-4">
-              <h4 className="font-medium text-purple-900 mb-2">Battery Storage Explained</h4>
-              <p className="text-purple-800 text-sm">
-                Your {selectedBattery.configuration} system will store enough energy to power 
-                your appliances when the sun isn't shining. This setup provides 
-                {selectedBattery.total_capacity_kwh}kWh of storage capacity, giving you reliable 
-                backup power for your home.
-              </p>
+              <h4 className="font-medium text-purple-900 mb-2">Battery Calculation</h4>
+              <div className="text-purple-800 text-sm space-y-1">
+                <p><strong>Night Energy:</strong> {calculateEnergyNeeds().toFixed(2)} kWh</p>
+                <p><strong>Battery Efficiency:</strong> {selectedBattery.chemistry === 'Lithium' ? '85%' : '80%'} (round-trip)</p>
+                <p><strong>Depth of Discharge:</strong> {selectedBattery.chemistry === 'Lithium' ? '80%' : '70%'}</p>
+                <p><strong>Required Capacity:</strong> {calculateEnergyNeeds().toFixed(2)} kWh ÷ (Efficiency × DoD)</p>
+                <p>Your {selectedBattery.configuration} provides {selectedBattery.total_capacity_kwh}kWh total capacity with sufficient usable energy for night loads.</p>
+              </div>
             </CardContent>
           </Card>
         )}

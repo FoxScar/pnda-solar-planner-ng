@@ -117,6 +117,7 @@ export type Database = {
           id: string
           kva_rating: number
           model_name: string
+          power_factor: number | null
           surge_capacity: string | null
           unit_cost: number
           voltage_bus: number
@@ -127,6 +128,7 @@ export type Database = {
           id?: string
           kva_rating: number
           model_name: string
+          power_factor?: number | null
           surge_capacity?: string | null
           unit_cost: number
           voltage_bus: number
@@ -137,6 +139,7 @@ export type Database = {
           id?: string
           kva_rating?: number
           model_name?: string
+          power_factor?: number | null
           surge_capacity?: string | null
           unit_cost?: number
           voltage_bus?: number
@@ -269,9 +272,9 @@ export type Database = {
       }
       calculate_battery_system: {
         Args: {
-          daily_energy_kwh: number
+          night_energy_kwh: number
           preferred_chemistry?: string
-          backup_hours?: number
+          night_duration_hours?: number
         }
         Returns: {
           battery_id: string
@@ -296,10 +299,29 @@ export type Database = {
           total_system_cost: number
         }[]
       }
+      calculate_inverter_with_power_factor: {
+        Args: {
+          peak_load_watts: number
+          power_factor?: number
+          safety_margin?: number
+        }
+        Returns: {
+          inverter_id: string
+          model_name: string
+          kva_rating: number
+          voltage_bus: number
+          surge_capacity: string
+          unit_cost: number
+          va_requirement: number
+          recommended: boolean
+        }[]
+      }
       calculate_panel_system: {
         Args: {
-          daily_energy_kwh: number
+          daytime_load_watts: number
+          night_energy_kwh: number
           state_name: string
+          sun_hours_per_day?: number
           preferred_panel_model?: string
         }
         Returns: {
@@ -311,6 +333,7 @@ export type Database = {
           total_cost: number
           daily_generation_kwh: number
           derating_factor: number
+          calculation_breakdown: Json
         }[]
       }
       generate_quote_data: {

@@ -17,34 +17,25 @@ const InverterSizing = ({ onNext, onBack, data }) => {
 
   const fetchInverters = async () => {
     try {
-      // Calculate total peak load from appliances
-      const totalPowerWatts = calculateTotalPower();
+      // Use daytime load for inverter sizing (highest concurrent load)
+      const peakLoadWatts = data?.daytimeLoad || calculateTotalPower();
+      console.log('Peak load for inverter sizing:', peakLoadWatts);
       
-      // Get all available inverters for display
-      const { data: inverterData, error } = await supabase
-        .from('inverters')
-        .select('*')
-        .eq('available', true)
-        .order('kva_rating', { ascending: true });
+      // Use new calculation function with power factor
+      const { data: inverterRecommendations, error } = await supabase
+        .rpc('calculate_inverter_with_power_factor', {
+          peak_load_watts: peakLoadWatts,
+          power_factor: 0.8,
+          safety_margin: 0.2
+        });
 
       if (error) {
-        console.error('Error fetching inverters:', error);
+        console.error('Error fetching inverter recommendations:', error);
         return;
       }
 
-      // Find recommended inverter based on peak load
-      // Simple recommendation logic: find first inverter that can handle the load with some margin
-      const recommendedInverter = (inverterData || []).find(inverter => 
-        (inverter.kva_rating * 1000 * 0.8) >= totalPowerWatts // 80% derating factor
-      );
-
-      // Mark the recommended inverter
-      const invertersWithRecommendation = (inverterData || []).map((inverter) => ({
-        ...inverter,
-        recommended: recommendedInverter && inverter.id === recommendedInverter.id
-      }));
-
-      setInverters(invertersWithRecommendation);
+      console.log('Inverter recommendations:', inverterRecommendations);
+      setInverters(inverterRecommendations || []);
     } catch (error) {
       console.error('Error:', error);
     } finally {
@@ -54,9 +45,12 @@ const InverterSizing = ({ onNext, onBack, data }) => {
 
   const calculateTotalPower = () => {
     if (!data?.appliances) return 0;
-    return data.appliances.reduce((total, appliance) => {
-      return total + (appliance.power * appliance.quantity);
-    }, 0);
+    // Use daytime load for inverter sizing
+    return data.appliances
+      .filter(app => app.period === 'day' || app.period === 'both')
+      .reduce((total, appliance) => {
+        return total + (appliance.power * appliance.quantity);
+      }, 0);
   };
 
   const handleNext = () => {
@@ -123,7 +117,7 @@ const InverterSizing = ({ onNext, onBack, data }) => {
                       )}
                     </div>
                     
-                    <div className="flex items-center gap-4 text-sm mb-3">
+                    <div className="grid grid-cols-2 gap-4 text-sm mb-3">
                       <div className="flex items-center gap-1">
                         <span className="font-medium">Voltage:</span>
                         <span className="text-gray-600">{inverter.voltage_bus}V</span>
@@ -131,6 +125,10 @@ const InverterSizing = ({ onNext, onBack, data }) => {
                       <div className="flex items-center gap-1">
                         <span className="font-medium">Capacity:</span>
                         <span className="text-gray-600">{inverter.kva_rating}kVA</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="font-medium">VA Requirement:</span>
+                        <span className="text-gray-600">{inverter.va_requirement}VA</span>
                       </div>
                       <div className="flex items-center gap-1">
                         <span className="font-medium">Surge:</span>
@@ -153,12 +151,14 @@ const InverterSizing = ({ onNext, onBack, data }) => {
         {selectedInverter && (
           <Card className="bg-blue-50 border-blue-200">
             <CardContent className="p-4">
-              <h4 className="font-medium text-blue-900 mb-2">Why this inverter?</h4>
-              <p className="text-blue-800 text-sm">
-                The {selectedInverter.model_name} can handle your power requirements efficiently. 
-                It provides {selectedInverter.kva_rating}kVA of power capacity, which is sufficient for 
-                your selected appliances with room for future expansion.
-              </p>
+              <h4 className="font-medium text-blue-900 mb-2">Inverter Calculation</h4>
+              <div className="text-blue-800 text-sm space-y-1">
+                <p><strong>Daytime Load:</strong> {data?.daytimeLoad || 0}W</p>
+                <p><strong>Power Factor:</strong> 0.8 (typical for household loads)</p>
+                <p><strong>VA Requirement:</strong> {selectedInverter.va_requirement}VA = {data?.daytimeLoad || 0}W ÷ 0.8</p>
+                <p><strong>Safety Margin:</strong> 20% added for surge capacity</p>
+                <p>The {selectedInverter.model_name} provides {selectedInverter.kva_rating}kVA capacity, sufficient for your daytime load with safety margin.</p>
+              </div>
             </CardContent>
           </Card>
         )}
