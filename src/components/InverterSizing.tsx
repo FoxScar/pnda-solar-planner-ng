@@ -107,12 +107,12 @@ const InverterSizing = ({ onNext, onBack, data }) => {
               onClick={() => setSelectedInverter(inverter)}
             >
               <CardContent className="p-4">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      <h3 className="font-semibold text-lg">
-                        {inverter.is_merged ? inverter.merge_configuration : inverter.model_name}
-                      </h3>
+                <div className="space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                    <h3 className="font-semibold text-lg">
+                      {inverter.is_merged ? inverter.merge_configuration : inverter.model_name}
+                    </h3>
+                    <div className="flex flex-wrap gap-1">
                       {inverter.recommended && (
                         <Badge className="bg-green-100 text-green-700 border-green-200">
                           Recommended
@@ -127,8 +127,9 @@ const InverterSizing = ({ onNext, onBack, data }) => {
                         <CheckCircle className="w-5 h-5 text-green-500" />
                       )}
                     </div>
-                    
-                    <div className="grid grid-cols-2 gap-4 text-sm mb-3">
+                  </div>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4 text-sm">
                       <div className="flex items-center gap-1">
                         <span className="font-medium">Voltage:</span>
                         <span className="text-gray-600">{inverter.voltage_bus}V</span>
@@ -147,8 +148,7 @@ const InverterSizing = ({ onNext, onBack, data }) => {
                         <span className="font-medium">Surge:</span>
                         <span className="text-gray-600">{inverter.surge_capacity}</span>
                       </div>
-                    </div>
-                  </div>
+                     </div>
                   
                   <div className="text-right">
                     <div className="text-xl font-bold text-gray-900">
