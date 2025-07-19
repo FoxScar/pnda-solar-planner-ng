@@ -292,18 +292,18 @@ const Index = () => {
       <div className="container mx-auto px-4 py-6">
         {/* Header with Progress */}
         <div className="mb-6">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
             <h1 className="text-xl font-bold text-gray-900">P'NDA SOLAR</h1>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center justify-between sm:gap-4">
               <div className="text-sm text-gray-600">
                 Step {currentStep} of {totalSteps}
               </div>
               {user && (
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-600">Welcome, {user.email}</span>
+                  <span className="text-sm text-gray-600 hidden sm:inline">Welcome, {user.email}</span>
                   <Button variant="outline" size="sm" onClick={handleSignOut}>
-                    <LogOut className="w-4 h-4 mr-1" />
-                    Sign Out
+                    <LogOut className="w-4 h-4 sm:mr-1" />
+                    <span className="hidden sm:inline">Sign Out</span>
                   </Button>
                 </div>
               )}
