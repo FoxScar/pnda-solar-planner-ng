@@ -87,14 +87,14 @@ const Index = () => {
 
       switch(currentStep) {
         case 1: // From ApplianceSelection
-          if (!data || !Array.isArray(data) || data.length === 0) {
+          if (!data || !Array.isArray(data.appliances) || data.appliances.length === 0) {
             setGlobalError('Please select at least one appliance before proceeding.');
             return;
           }
-          setApplianceData(data);
+          setApplianceData(data.appliances);
           break;
         case 2: // From InverterSizing
-          if (!data || !data.id) {
+          if (!data || !data.inverter_id) {
             setGlobalError('Please select an inverter before proceeding.');
             return;
           }
