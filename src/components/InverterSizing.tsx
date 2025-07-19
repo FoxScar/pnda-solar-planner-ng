@@ -12,10 +12,12 @@ const InverterSizing = ({ onNext, onBack, data }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    console.log('InverterSizing component mounted, data:', data);
     fetchInverters();
   }, []);
 
   const fetchInverters = async () => {
+    console.log('fetchInverters called with data:', data);
     try {
       // Use daytime load for inverter sizing (highest concurrent load)
       const peakLoadWatts = data?.daytimeLoad || calculateTotalPower();
@@ -67,6 +69,8 @@ const InverterSizing = ({ onNext, onBack, data }) => {
     }).format(price);
   };
 
+  console.log('InverterSizing render - loading:', loading, 'inverters:', inverters.length, 'selectedInverter:', selectedInverter);
+  
   if (loading) {
     return (
       <Card className="w-full max-w-2xl mx-auto">
@@ -90,7 +94,7 @@ const InverterSizing = ({ onNext, onBack, data }) => {
         <div className="grid gap-4">
           {inverters.map((inverter) => (
             <Card 
-              key={inverter.id}
+              key={inverter.inverter_id}
               className={`cursor-pointer transition-all duration-200 ${
                 selectedInverter?.inverter_id === inverter.inverter_id 
                   ? 'ring-2 ring-orange-500 bg-orange-50' 
