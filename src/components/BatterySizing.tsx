@@ -32,15 +32,33 @@ const BatterySizing = ({ onNext, onBack, data }) => {
         return;
       }
       
-      // Get battery recommendations using RPC for different chemistries
-      const chemistries = ['Lithium', 'AGM', 'Flooded'];
+      // Get lithium battery options (multiple configurations)
+      const { data: lithiumOptions, error: lithiumError } = await supabase
+        .rpc('calculate_lithium_battery_options', {
+          night_energy_kwh: data?.nightEnergy || dailyEnergyKwh,
+          night_duration_hours: 13
+        });
+
       const batteryRecommendations = [];
 
-      for (const chemistry of chemistries) {
+      if (lithiumError) {
+        console.error('Error fetching lithium batteries:', lithiumError);
+      } else if (lithiumOptions && lithiumOptions.length > 0) {
+        console.log('Found lithium options:', lithiumOptions);
+        batteryRecommendations.push(...lithiumOptions.map(option => ({
+          ...option,
+          recommended: option.is_optimal
+        })));
+      }
+
+      // Get traditional battery options (AGM, Flooded)
+      const traditionalChemistries = ['AGM', 'Flooded'];
+      
+      for (const chemistry of traditionalChemistries) {
         console.log(`Fetching ${chemistry} batteries for ${dailyEnergyKwh} kWh daily energy...`);
         
         const { data: recommendation, error: rpcError } = await supabase
-          .rpc('calculate_battery_system', {
+          .rpc('calculate_traditional_battery_system', {
             night_energy_kwh: data?.nightEnergy || dailyEnergyKwh,
             preferred_chemistry: chemistry,
             night_duration_hours: 13
@@ -55,7 +73,7 @@ const BatterySizing = ({ onNext, onBack, data }) => {
           console.log(`Found ${chemistry} recommendation:`, recommendation[0]);
           batteryRecommendations.push({
             ...recommendation[0],
-            recommended: chemistry === 'Lithium' // Prefer Lithium
+            recommended: false // Traditional batteries not preferred
           });
         } else {
           console.log(`No ${chemistry} batteries found for energy requirements`);
@@ -305,13 +323,16 @@ const BatterySizing = ({ onNext, onBack, data }) => {
         {selectedBattery && (
           <Card className="bg-purple-50 border-purple-200">
             <CardContent className="p-4">
-              <h4 className="font-medium text-purple-900 mb-2">Battery Calculation</h4>
+              <h4 className="font-medium text-purple-900 mb-2">Your Selection</h4>
               <div className="text-purple-800 text-sm space-y-1">
-                <p><strong>Night Energy:</strong> {calculateEnergyNeeds().toFixed(2)} kWh</p>
-                <p><strong>Battery Efficiency:</strong> {selectedBattery.chemistry === 'Lithium' ? '85%' : '80%'} (round-trip)</p>
-                <p><strong>Depth of Discharge:</strong> {selectedBattery.chemistry === 'Lithium' ? '80%' : '70%'}</p>
-                <p><strong>Required Capacity:</strong> {calculateEnergyNeeds().toFixed(2)} kWh ÷ (Efficiency × DoD)</p>
-                <p>Your {selectedBattery.configuration} provides {selectedBattery.total_capacity_kwh}kWh total capacity with sufficient usable energy for night loads.</p>
+                <p><strong>Selected:</strong> {selectedBattery.configuration}</p>
+                <p><strong>Total Capacity:</strong> {selectedBattery.total_capacity_kwh}kWh</p>
+                <p><strong>Your Night Energy:</strong> {calculateEnergyNeeds().toFixed(2)} kWh</p>
+                <p><strong>Battery Type:</strong> {selectedBattery.chemistry}</p>
+                {selectedBattery.chemistry === 'Lithium' && selectedBattery.is_optimal && (
+                  <p className="text-green-600"><strong>✓ Most cost-effective lithium option</strong></p>
+                )}
+                <p>✓ Sufficient capacity for your nighttime energy needs.</p>
               </div>
             </CardContent>
           </Card>

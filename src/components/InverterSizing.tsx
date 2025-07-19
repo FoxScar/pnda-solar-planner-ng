@@ -21,9 +21,9 @@ const InverterSizing = ({ onNext, onBack, data }) => {
       const peakLoadWatts = data?.daytimeLoad || calculateTotalPower();
       console.log('Peak load for inverter sizing:', peakLoadWatts);
       
-      // Use new calculation function with power factor
+      // Use new calculation function with merging capability
       const { data: inverterRecommendations, error } = await supabase
-        .rpc('calculate_inverter_with_power_factor', {
+        .rpc('calculate_inverter_with_merging', {
           peak_load_watts: peakLoadWatts,
           power_factor: 0.8,
           safety_margin: 0.2
@@ -92,7 +92,7 @@ const InverterSizing = ({ onNext, onBack, data }) => {
             <Card 
               key={inverter.id}
               className={`cursor-pointer transition-all duration-200 ${
-                selectedInverter?.id === inverter.id 
+                selectedInverter?.inverter_id === inverter.inverter_id 
                   ? 'ring-2 ring-orange-500 bg-orange-50' 
                   : 'hover:shadow-md'
               } ${
@@ -106,13 +106,20 @@ const InverterSizing = ({ onNext, onBack, data }) => {
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2">
-                      <h3 className="font-semibold text-lg">{inverter.model_name}</h3>
+                      <h3 className="font-semibold text-lg">
+                        {inverter.is_merged ? inverter.merge_configuration : inverter.model_name}
+                      </h3>
                       {inverter.recommended && (
                         <Badge className="bg-green-100 text-green-700 border-green-200">
                           Recommended
                         </Badge>
                       )}
-                      {selectedInverter?.id === inverter.id && (
+                      {inverter.is_merged && (
+                        <Badge className="bg-blue-100 text-blue-700 border-blue-200">
+                          Merged System
+                        </Badge>
+                      )}
+                      {selectedInverter?.inverter_id === inverter.inverter_id && (
                         <CheckCircle className="w-5 h-5 text-green-500" />
                       )}
                     </div>
@@ -123,13 +130,15 @@ const InverterSizing = ({ onNext, onBack, data }) => {
                         <span className="text-gray-600">{inverter.voltage_bus}V</span>
                       </div>
                       <div className="flex items-center gap-1">
-                        <span className="font-medium">Capacity:</span>
+                        <span className="font-medium">Total Capacity:</span>
                         <span className="text-gray-600">{inverter.kva_rating}kVA</span>
                       </div>
-                      <div className="flex items-center gap-1">
-                        <span className="font-medium">VA Requirement:</span>
-                        <span className="text-gray-600">{inverter.va_requirement}VA</span>
-                      </div>
+                      {inverter.quantity > 1 && (
+                        <div className="flex items-center gap-1">
+                          <span className="font-medium">Quantity:</span>
+                          <span className="text-gray-600">{inverter.quantity} units</span>
+                        </div>
+                      )}
                       <div className="flex items-center gap-1">
                         <span className="font-medium">Surge:</span>
                         <span className="text-gray-600">{inverter.surge_capacity}</span>
@@ -151,13 +160,15 @@ const InverterSizing = ({ onNext, onBack, data }) => {
         {selectedInverter && (
           <Card className="bg-blue-50 border-blue-200">
             <CardContent className="p-4">
-              <h4 className="font-medium text-blue-900 mb-2">Inverter Calculation</h4>
+              <h4 className="font-medium text-blue-900 mb-2">Your Selection</h4>
               <div className="text-blue-800 text-sm space-y-1">
-                <p><strong>Daytime Load:</strong> {data?.daytimeLoad || 0}W</p>
-                <p><strong>Power Factor:</strong> 0.8 (typical for household loads)</p>
-                <p><strong>VA Requirement:</strong> {selectedInverter.va_requirement}VA = {data?.daytimeLoad || 0}W ÷ 0.8</p>
-                <p><strong>Safety Margin:</strong> 20% added for surge capacity</p>
-                <p>The {selectedInverter.model_name} provides {selectedInverter.kva_rating}kVA capacity, sufficient for your daytime load with safety margin.</p>
+                <p><strong>Selected:</strong> {selectedInverter.is_merged ? selectedInverter.merge_configuration : selectedInverter.model_name}</p>
+                <p><strong>Total Capacity:</strong> {selectedInverter.kva_rating}kVA</p>
+                <p><strong>Your Load:</strong> {data?.daytimeLoad || 0}W</p>
+                {selectedInverter.is_merged && (
+                  <p className="text-blue-600"><strong>Note:</strong> This is a merged configuration for higher capacity needs.</p>
+                )}
+                <p>✓ Suitable for your daytime appliance load with safety margin included.</p>
               </div>
             </CardContent>
           </Card>

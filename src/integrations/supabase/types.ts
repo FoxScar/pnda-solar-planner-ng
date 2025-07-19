@@ -270,24 +270,6 @@ export type Database = {
         Args: { target_user_id: string; bootstrap_key?: string }
         Returns: Json
       }
-      calculate_battery_system: {
-        Args: {
-          night_energy_kwh: number
-          preferred_chemistry?: string
-          night_duration_hours?: number
-        }
-        Returns: {
-          battery_id: string
-          chemistry: string
-          voltage: number
-          capacity_kwh: number
-          recommended_quantity: number
-          total_capacity_kwh: number
-          total_cost: number
-          configuration: string
-          pros: string[]
-        }[]
-      }
       calculate_complete_system: {
         Args: { appliances_data: Json; state_name: string; preferences?: Json }
         Returns: {
@@ -299,7 +281,7 @@ export type Database = {
           total_system_cost: number
         }[]
       }
-      calculate_inverter_with_power_factor: {
+      calculate_inverter_with_merging: {
         Args: {
           peak_load_watts: number
           power_factor?: number
@@ -314,6 +296,24 @@ export type Database = {
           unit_cost: number
           va_requirement: number
           recommended: boolean
+          is_merged: boolean
+          merge_configuration: string
+          quantity: number
+        }[]
+      }
+      calculate_lithium_battery_options: {
+        Args: { night_energy_kwh: number; night_duration_hours?: number }
+        Returns: {
+          battery_id: string
+          chemistry: string
+          voltage: number
+          capacity_kwh: number
+          recommended_quantity: number
+          total_capacity_kwh: number
+          total_cost: number
+          configuration: string
+          pros: string[]
+          is_optimal: boolean
         }[]
       }
       calculate_panel_system: {
@@ -334,6 +334,24 @@ export type Database = {
           daily_generation_kwh: number
           derating_factor: number
           calculation_breakdown: Json
+        }[]
+      }
+      calculate_traditional_battery_system: {
+        Args: {
+          night_energy_kwh: number
+          preferred_chemistry: string
+          night_duration_hours?: number
+        }
+        Returns: {
+          battery_id: string
+          chemistry: string
+          voltage: number
+          capacity_kwh: number
+          recommended_quantity: number
+          total_capacity_kwh: number
+          total_cost: number
+          configuration: string
+          pros: string[]
         }[]
       }
       generate_quote_data: {
