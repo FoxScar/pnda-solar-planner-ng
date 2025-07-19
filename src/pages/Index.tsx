@@ -205,7 +205,7 @@ const Index = () => {
             <img 
               src={pndaSolarLogo} 
               alt="P'NDA SOLAR Logo"
-              className="w-32 h-20 mx-auto mb-4 object-contain"
+              className="w-48 h-32 mx-auto mb-4 object-contain"
             />
             
             <CardDescription className="text-lg text-gray-600">
