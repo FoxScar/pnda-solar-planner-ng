@@ -7,10 +7,8 @@ interface Appliance {
   power?: number;
   power_rating?: number;
   quantity: number;
-  hours?: number;
-  hoursPerDay?: number;
-  timeOfUse?: 'Day' | 'Night' | 'Both';
-  period?: 'day' | 'night' | 'both';
+  dayHours: number;
+  nightHours: number;
 }
 
 interface CustomBattery {
@@ -123,24 +121,18 @@ export function calculateSolarSystem(
     const applianceName = app.type || app.name || '';
     const power = app.power || app.power_rating || APPLIANCES[applianceName] || 0;
     const quantity = app.quantity || 1;
-    const hours = app.hours || app.hoursPerDay || 0;
-    const timeOfUse = app.timeOfUse || app.period || 'both';
+    const dayHours = app.dayHours || 0;
+    const nightHours = app.nightHours || 0;
 
     if (!power) return;
 
     const totalPower = power * quantity; // Total watts for this appliance
-    const dailyEnergy = totalPower * hours; // Daily energy consumption in Wh
+    const dayEnergy = totalPower * dayHours; // Day energy consumption in Wh
+    const nightEnergy = totalPower * nightHours; // Night energy consumption in Wh
 
-    // Distribute energy based on time of use
-    if (timeOfUse === 'Day' || timeOfUse === 'day') {
-      dayLoad += dailyEnergy;
-    } else if (timeOfUse === 'Night' || timeOfUse === 'night') {
-      nightLoad += dailyEnergy;
-    } else {
-      // Both
-      dayLoad += dailyEnergy / 2;
-      nightLoad += dailyEnergy / 2;
-    }
+    // Add day and night energy separately
+    dayLoad += dayEnergy;
+    nightLoad += nightEnergy;
 
     totalLoad += totalPower; // Add to instantaneous load
   });

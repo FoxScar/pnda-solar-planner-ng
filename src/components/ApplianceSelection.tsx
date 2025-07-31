@@ -68,8 +68,8 @@ const ApplianceSelection = ({ onNext, onBack, data }) => {
       name: '',
       power_rating: 0,
       quantity: 1,
-      hoursPerDay: 4,
-      period: 'both'
+      dayHours: 0,
+      nightHours: 0
     };
     console.log('Adding new appliance:', newAppliance);
     setAppliances([...appliances, newAppliance]);
@@ -126,12 +126,14 @@ const ApplianceSelection = ({ onNext, onBack, data }) => {
       return;
     }
 
-    const invalidAppliances = appliances.filter(app => !app.name || app.quantity <= 0);
+    const invalidAppliances = appliances.filter(app => 
+      !app.name || app.quantity <= 0 || (app.dayHours === 0 && app.nightHours === 0)
+    );
     if (invalidAppliances.length > 0) {
       console.log('Invalid appliances found:', invalidAppliances);
       toast({
         title: "Invalid appliances",
-        description: "Please ensure all appliances have a name and quantity greater than 0.",
+        description: "Please ensure all appliances have a name, quantity greater than 0, and at least some usage hours.",
         variant: "destructive"
       });
       return;
@@ -178,7 +180,9 @@ const ApplianceSelection = ({ onNext, onBack, data }) => {
     }
   };
 
-  const isValid = appliances.length > 0 && appliances.every(app => app.name && app.quantity > 0);
+  const isValid = appliances.length > 0 && appliances.every(app => 
+    app.name && app.quantity > 0 && (app.dayHours > 0 || app.nightHours > 0)
+  );
 
   if (loading) {
     return (
@@ -276,53 +280,49 @@ const ApplianceSelection = ({ onNext, onBack, data }) => {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor={`hours-${appliance.id}`} className="flex items-center gap-1">
-                      Hours per day
+                    <Label htmlFor={`dayHours-${appliance.id}`} className="flex items-center gap-1">
+                      Day Hours (7am-6pm)
                       <Tooltip>
                         <TooltipTrigger>
                           <Info className="w-3 h-3 text-gray-400" />
                         </TooltipTrigger>
                         <TooltipContent>
-                          <p>How many hours per day do you use this appliance?</p>
+                          <p>Hours this appliance runs during daytime (7am-6pm)</p>
                         </TooltipContent>
                       </Tooltip>
                     </Label>
                     <Input
-                      id={`hours-${appliance.id}`}
+                      id={`dayHours-${appliance.id}`}
                       type="number"
-                      min="0.5"
-                      max="24"
+                      min="0"
+                      max="11"
                       step="0.5"
-                      value={appliance.hoursPerDay}
-                      onChange={(e) => updateAppliance(appliance.id, 'hoursPerDay', parseFloat(e.target.value) || 1)}
+                      value={appliance.dayHours || 0}
+                      onChange={(e) => updateAppliance(appliance.id, 'dayHours', parseFloat(e.target.value) || 0)}
                     />
                   </div>
 
                   <div>
-                    <Label htmlFor={`period-${appliance.id}`} className="flex items-center gap-1">
-                      Usage time
+                    <Label htmlFor={`nightHours-${appliance.id}`} className="flex items-center gap-1">
+                      Night Hours (6pm-7am)
                       <Tooltip>
                         <TooltipTrigger>
                           <Info className="w-3 h-3 text-gray-400" />
                         </TooltipTrigger>
                         <TooltipContent>
-                          <p>When do you mostly use this appliance?</p>
+                          <p>Hours this appliance runs during nighttime (6pm-7am)</p>
                         </TooltipContent>
                       </Tooltip>
                     </Label>
-                    <Select 
-                      value={appliance.period}
-                      onValueChange={(value) => updateAppliance(appliance.id, 'period', value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select time" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-white border border-gray-200 shadow-lg z-50">
-                        <SelectItem value="day">Day only</SelectItem>
-                        <SelectItem value="night">Night only</SelectItem>
-                        <SelectItem value="both">Day & Night</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <Input
+                      id={`nightHours-${appliance.id}`}
+                      type="number"
+                      min="0"
+                      max="13"
+                      step="0.5"
+                      value={appliance.nightHours || 0}
+                      onChange={(e) => updateAppliance(appliance.id, 'nightHours', parseFloat(e.target.value) || 0)}
+                    />
                   </div>
                 </div>
 
