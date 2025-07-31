@@ -159,7 +159,7 @@ export function calculateSolarSystem(
   const dod = 0.8; // Depth of discharge (80% for Li-ion)
   const efficiency = 0.9; // System efficiency (90%)
   const batteryVoltage = customBattery.voltage || 24; // Default 24V system
-  const autonomyHours = 18; // Backup duration for night loads
+  const autonomyHours = 13; // Backup duration for night loads (6pm to 7am)
 
   // Calculate required battery capacity in Ah
   const batteryCapacityAh = (nightLoad * autonomyHours) / (dod * efficiency * batteryVoltage);
@@ -182,8 +182,8 @@ export function calculateSolarSystem(
   const systemEfficiency = 0.75; // Overall system efficiency (75%)
   const panelWatt = 300; // Standard panel wattage
 
-  // Calculate energy needed to recharge batteries (night load over 18 hours)
-  const batteryRechargeLoad = (nightLoad * 18) / efficiency;
+  // Calculate energy needed to recharge batteries (night load over 13 hours)
+  const batteryRechargeLoad = (nightLoad * autonomyHours) / efficiency;
 
   // Total daily energy requirement
   const totalDailyEnergy = dayLoad + batteryRechargeLoad;
@@ -246,5 +246,5 @@ export { APPLIANCES, BATTERY_OPTIONS, INVERTER_OPTIONS };
  * - System Efficiency: 0.9 (90% overall efficiency)
  * - Peak Sun Hours: 5 (average for Nigeria)
  * - Panel Efficiency: 0.75 (75% considering losses)
- * - Autonomy Hours: 18 (backup duration for night loads)
+ * - Autonomy Hours: 13 (backup duration for night loads from 6pm to 7am)
  */
