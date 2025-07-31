@@ -302,7 +302,13 @@ export type Database = {
         }[]
       }
       calculate_lithium_battery_options: {
-        Args: { night_energy_kwh: number; night_duration_hours?: number }
+        Args:
+          | { night_energy_kwh: number; night_duration_hours?: number }
+          | {
+              night_energy_kwh: number
+              system_voltage?: number
+              night_duration_hours?: number
+            }
         Returns: {
           battery_id: string
           chemistry: string
