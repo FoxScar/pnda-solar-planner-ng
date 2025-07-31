@@ -6,13 +6,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Edit, Trash2, Save, X } from "lucide-react";
+import { Plus, Edit, Trash2, Save, X, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
 const ApplianceManager = () => {
   const [appliances, setAppliances] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [formData, setFormData] = useState({
@@ -28,7 +29,9 @@ const ApplianceManager = () => {
   }, []);
 
   const fetchAppliances = async () => {
+    setLoading(true);
     try {
+      console.log('[ApplianceManager] Fetching appliances...');
       const { data, error } = await supabase
         .from('appliances')
         .select('*')
@@ -36,7 +39,9 @@ const ApplianceManager = () => {
       
       if (error) throw error;
       setAppliances(data || []);
+      console.log('[ApplianceManager] Fetched appliances:', data?.length || 0);
     } catch (error) {
+      console.error('[ApplianceManager] Error fetching appliances:', error);
       toast({
         title: "Error",
         description: "Failed to fetch appliances",
@@ -66,6 +71,7 @@ const ApplianceManager = () => {
   };
 
   const handleSave = async () => {
+    setSaving(true);
     try {
       const dataToSave = {
         name: formData.name,
@@ -73,6 +79,8 @@ const ApplianceManager = () => {
         category: formData.category,
         is_energy_efficient: formData.is_energy_efficient
       };
+
+      console.log('[ApplianceManager] Saving appliance:', dataToSave);
 
       if (editingId) {
         const { error } = await supabase
@@ -94,11 +102,14 @@ const ApplianceManager = () => {
       await fetchAppliances();
       resetForm();
     } catch (error) {
+      console.error('[ApplianceManager] Error saving appliance:', error);
       toast({
         title: "Error",
         description: error.message,
         variant: "destructive"
       });
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -142,10 +153,21 @@ const ApplianceManager = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h3 className="text-lg font-semibold">Appliance Management</h3>
-        <Button onClick={() => setShowAddForm(true)} disabled={showAddForm}>
-          <Plus className="w-4 h-4 mr-2" />
-          Add Appliance
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button 
+            onClick={fetchAppliances} 
+            variant="outline" 
+            size="sm"
+            disabled={loading}
+          >
+            <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+          <Button onClick={() => setShowAddForm(true)} disabled={showAddForm}>
+            <Plus className="w-4 h-4 mr-2" />
+            Add Appliance
+          </Button>
+        </div>
       </div>
 
       {showAddForm && (
@@ -194,11 +216,11 @@ const ApplianceManager = () => {
               </div>
             </div>
             <div className="flex gap-2">
-              <Button onClick={handleSave}>
-                <Save className="w-4 h-4 mr-2" />
-                {editingId ? 'Update' : 'Save'}
+              <Button onClick={handleSave} disabled={saving}>
+                <Save className={`w-4 h-4 mr-2 ${saving ? 'animate-spin' : ''}`} />
+                {saving ? 'Saving...' : (editingId ? 'Update' : 'Save')}
               </Button>
-              <Button variant="outline" onClick={resetForm}>
+              <Button variant="outline" onClick={resetForm} disabled={saving}>
                 <X className="w-4 h-4 mr-2" />
                 Cancel
               </Button>

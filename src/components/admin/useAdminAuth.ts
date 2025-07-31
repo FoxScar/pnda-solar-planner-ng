@@ -11,25 +11,41 @@ export const useAdminAuth = () => {
   const [isAdmin, setIsAdmin] = useState(false);
   const [needsInitialAdmin, setNeedsInitialAdmin] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const { toast } = useToast();
 
+  // Debug logging
+  const logDebug = (message: string, data?: any) => {
+    console.log(`[AdminAuth] ${message}`, data || '');
+  };
+
   useEffect(() => {
+    logDebug('Initializing admin auth');
     checkCurrentUser();
     checkInitialAdminStatus();
     
-    // Listen for auth changes
+    // Listen for auth changes with enhanced logging
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      logDebug('Auth state change', { event, userId: session?.user?.id });
+      
       if (session?.user) {
         setCurrentUser(session.user);
-        checkUserRoles(session.user.id);
+        // Use setTimeout to prevent potential deadlock
+        setTimeout(() => {
+          checkUserRoles(session.user.id);
+        }, 0);
       } else {
         setCurrentUser(null);
         setUserRoles([]);
         setIsAdmin(false);
+        logDebug('User signed out, cleared admin state');
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      logDebug('Cleaning up auth subscription');
+      subscription.unsubscribe();
+    };
   }, []);
 
   const checkCurrentUser = async () => {
@@ -54,13 +70,30 @@ export const useAdminAuth = () => {
   };
 
   const checkUserRoles = async (userId: string) => {
-    const { data: roles } = await supabase
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', userId);
-    
-    setUserRoles(roles || []);
-    setIsAdmin(roles?.some(r => r.role === 'admin') || false);
+    try {
+      logDebug('Checking user roles', { userId });
+      const { data: roles, error } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', userId);
+      
+      if (error) {
+        logDebug('Error fetching user roles', error);
+        throw error;
+      }
+      
+      setUserRoles(roles || []);
+      const adminStatus = roles?.some(r => r.role === 'admin') || false;
+      setIsAdmin(adminStatus);
+      logDebug('Updated roles', { roles, isAdmin: adminStatus });
+    } catch (error) {
+      logDebug('Failed to check user roles', error);
+      toast({
+        title: "Warning",
+        description: "Failed to check user permissions",
+        variant: "destructive"
+      });
+    }
   };
 
   const handleSignOut = async () => {
@@ -131,7 +164,35 @@ export const useAdminAuth = () => {
   };
 
   const handleAuthSuccess = () => {
+    logDebug('Auth success, refreshing status');
     checkInitialAdminStatus();
+  };
+
+  const refreshAdminData = async () => {
+    if (!currentUser) return;
+    
+    setRefreshing(true);
+    logDebug('Manually refreshing admin data');
+    
+    try {
+      await Promise.all([
+        checkUserRoles(currentUser.id),
+        checkInitialAdminStatus()
+      ]);
+      
+      toast({
+        title: "Success",
+        description: "Admin data refreshed successfully"
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to refresh admin data",
+        variant: "destructive"
+      });
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   return {
@@ -140,8 +201,10 @@ export const useAdminAuth = () => {
     isAdmin,
     needsInitialAdmin,
     loading,
+    refreshing,
     handleSignOut,
     bootstrapInitialAdmin,
-    handleAuthSuccess
+    handleAuthSuccess,
+    refreshAdminData
   };
 };

@@ -11,9 +11,11 @@ const AdminUtility = () => {
     isAdmin,
     needsInitialAdmin,
     loading,
+    refreshing,
     handleSignOut,
     bootstrapInitialAdmin,
-    handleAuthSuccess
+    handleAuthSuccess,
+    refreshAdminData
   } = useAdminAuth();
 
   if (currentUser && isAdmin) {
@@ -21,6 +23,8 @@ const AdminUtility = () => {
       <AdminDashboard 
         currentUser={currentUser}
         onSignOut={handleSignOut}
+        onRefresh={refreshAdminData}
+        refreshing={refreshing}
       />
     );
   }

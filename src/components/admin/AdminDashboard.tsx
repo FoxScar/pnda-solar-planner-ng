@@ -2,7 +2,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Shield, LogOut } from "lucide-react";
+import { Shield, LogOut, RefreshCw } from "lucide-react";
 import { User } from '@supabase/supabase-js';
 import ApplianceManager from "./ApplianceManager";
 import InverterManager from "./InverterManager";
@@ -12,9 +12,11 @@ import PanelManager from "./PanelManager";
 interface AdminDashboardProps {
   currentUser: User;
   onSignOut: () => void;
+  onRefresh: () => void;
+  refreshing: boolean;
 }
 
-const AdminDashboard = ({ currentUser, onSignOut }: AdminDashboardProps) => {
+const AdminDashboard = ({ currentUser, onSignOut, onRefresh, refreshing }: AdminDashboardProps) => {
   return (
     <Card className="w-full max-w-6xl mx-auto mt-8">
       <CardHeader>
@@ -23,15 +25,27 @@ const AdminDashboard = ({ currentUser, onSignOut }: AdminDashboardProps) => {
             <Shield className="w-5 h-5 text-blue-500" />
             Admin Panel
           </CardTitle>
-          <Button 
-            onClick={onSignOut} 
-            variant="outline" 
-            size="sm"
-            className="flex items-center gap-2"
-          >
-            <LogOut className="w-4 h-4" />
-            Sign Out
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button 
+              onClick={onRefresh} 
+              variant="outline" 
+              size="sm"
+              disabled={refreshing}
+              className="flex items-center gap-2"
+            >
+              <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+            <Button 
+              onClick={onSignOut} 
+              variant="outline" 
+              size="sm"
+              className="flex items-center gap-2"
+            >
+              <LogOut className="w-4 h-4" />
+              Sign Out
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent>
