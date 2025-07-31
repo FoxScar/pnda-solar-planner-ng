@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,16 +17,52 @@ import { useToast } from "@/hooks/use-toast";
 import pndaSolarLogo from '@/assets/pnda-solar-simple-logo.png';
 
 const Index = () => {
-  const [currentStep, setCurrentStep] = useState(0);
-  const [applianceData, setApplianceData] = useState([]);
-  const [inverterData, setInverterData] = useState(null);
-  const [batteryData, setBatteryData] = useState(null);
-  const [panelData, setPanelData] = useState(null);
+  const [currentStep, setCurrentStep] = useState(() => {
+    const saved = localStorage.getItem('solar-wizard-step');
+    return saved ? parseInt(saved, 10) : 0;
+  });
+  const [applianceData, setApplianceData] = useState(() => {
+    const saved = localStorage.getItem('solar-wizard-appliances');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [inverterData, setInverterData] = useState(() => {
+    const saved = localStorage.getItem('solar-wizard-inverter');
+    return saved ? JSON.parse(saved) : null;
+  });
+  const [batteryData, setBatteryData] = useState(() => {
+    const saved = localStorage.getItem('solar-wizard-battery');
+    return saved ? JSON.parse(saved) : null;
+  });
+  const [panelData, setPanelData] = useState(() => {
+    const saved = localStorage.getItem('solar-wizard-panels');
+    return saved ? JSON.parse(saved) : null;
+  });
   const [globalError, setGlobalError] = useState(null);
   const [showSavedQuotes, setShowSavedQuotes] = useState(false);
   const { user, signOut, loading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  // Auto-save data to localStorage
+  useEffect(() => {
+    localStorage.setItem('solar-wizard-step', currentStep.toString());
+  }, [currentStep]);
+
+  useEffect(() => {
+    localStorage.setItem('solar-wizard-appliances', JSON.stringify(applianceData));
+  }, [applianceData]);
+
+  useEffect(() => {
+    localStorage.setItem('solar-wizard-inverter', JSON.stringify(inverterData));
+  }, [inverterData]);
+
+  useEffect(() => {
+    localStorage.setItem('solar-wizard-battery', JSON.stringify(batteryData));
+  }, [batteryData]);
+
+  useEffect(() => {
+    localStorage.setItem('solar-wizard-panels', JSON.stringify(panelData));
+  }, [panelData]);
 
   const steps = [
     { name: 'Appliances', icon: Zap, component: ApplianceSelection },
@@ -41,6 +77,14 @@ const Index = () => {
   const completedSteps = currentStep === 0 ? 0 : currentStep;
   const progress = (completedSteps / totalSteps) * 100;
 
+  const clearLocalStorage = () => {
+    localStorage.removeItem('solar-wizard-step');
+    localStorage.removeItem('solar-wizard-appliances');
+    localStorage.removeItem('solar-wizard-inverter');
+    localStorage.removeItem('solar-wizard-battery');
+    localStorage.removeItem('solar-wizard-panels');
+  };
+
   const handleSignOut = async () => {
     try {
       await signOut();
@@ -50,6 +94,7 @@ const Index = () => {
       setBatteryData(null);
       setPanelData(null);
       setShowSavedQuotes(false);
+      clearLocalStorage();
       toast({
         title: "Signed Out",
         description: "You have been successfully signed out.",
@@ -273,12 +318,34 @@ const Index = () => {
               </div>
             )}
 
-            <Button 
-              onClick={handleStart}
-              className="w-full bg-gradient-to-r from-orange-500 to-yellow-500 hover:from-orange-600 hover:to-yellow-600 text-white font-semibold py-3 text-lg"
-            >
-              Start Sizing My Solar System
-            </Button>
+            <div className="space-y-2">
+              <Button 
+                onClick={handleStart}
+                className="w-full bg-gradient-to-r from-orange-500 to-yellow-500 hover:from-orange-600 hover:to-yellow-600 text-white font-semibold py-3 text-lg"
+              >
+                {applianceData.length > 0 || inverterData || batteryData || panelData ? 'Continue Where I Left Off' : 'Start Sizing My Solar System'}
+              </Button>
+              {(applianceData.length > 0 || inverterData || batteryData || panelData) && (
+                <Button 
+                  onClick={() => {
+                    setCurrentStep(0);
+                    setApplianceData([]);
+                    setInverterData(null);
+                    setBatteryData(null);
+                    setPanelData(null);
+                    clearLocalStorage();
+                    toast({
+                      title: "Progress Cleared",
+                      description: "All saved progress has been cleared.",
+                    });
+                  }}
+                  variant="outline"
+                  className="w-full"
+                >
+                  Start Fresh
+                </Button>
+              )}
+            </div>
           </CardContent>
         </Card>
       </div>
