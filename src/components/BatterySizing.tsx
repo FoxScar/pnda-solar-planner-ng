@@ -6,6 +6,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CheckCircle, Battery, AlertTriangle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { calculateSolarSystem } from "@/components/utils/solarCalculations";
 
 const BatterySizing = ({ onNext, onBack, data }) => {
   const [selectedBattery, setSelectedBattery] = useState(data?.battery || null);
@@ -22,12 +23,19 @@ const BatterySizing = ({ onNext, onBack, data }) => {
     try {
       setError(null);
       
-      // Calculate daily energy needs
-      const dailyEnergyKwh = calculateEnergyNeeds();
-      console.log('Daily energy needs (kWh):', dailyEnergyKwh);
+      // Get calculated system requirements
+      const systemCalc = data?.systemCalculation || calculateSolarSystem(data?.appliances || []);
+      const nightEnergyKwh = systemCalc.nightLoadWh / 1000; // Convert to kWh
+      const batteryCapacityAh = systemCalc.calculations.batteryCapacityAh;
       
-      if (dailyEnergyKwh <= 0) {
-        setError('No energy requirements found. Please go back and select your appliances.');
+      console.log('System calculation for batteries:', {
+        nightEnergyKwh,
+        batteryCapacityAh,
+        recommendedConfig: systemCalc.batteryConfig
+      });
+      
+      if (nightEnergyKwh <= 0) {
+        setError('No night energy requirements found. Please go back and select appliances used at night.');
         setLoading(false);
         return;
       }
@@ -35,8 +43,8 @@ const BatterySizing = ({ onNext, onBack, data }) => {
       // Get lithium battery options (multiple configurations)
       const { data: lithiumOptions, error: lithiumError } = await supabase
         .rpc('calculate_lithium_battery_options', {
-          night_energy_kwh: data?.nightEnergy || dailyEnergyKwh,
-          night_duration_hours: 13
+          night_energy_kwh: nightEnergyKwh,
+          night_duration_hours: systemCalc.calculations.autonomyHours
         });
 
       const batteryRecommendations = [];
@@ -55,13 +63,13 @@ const BatterySizing = ({ onNext, onBack, data }) => {
       const traditionalChemistries = ['AGM', 'Flooded'];
       
       for (const chemistry of traditionalChemistries) {
-        console.log(`Fetching ${chemistry} batteries for ${dailyEnergyKwh} kWh daily energy...`);
+        console.log(`Fetching ${chemistry} batteries for ${nightEnergyKwh} kWh night energy...`);
         
         const { data: recommendation, error: rpcError } = await supabase
           .rpc('calculate_traditional_battery_system', {
-            night_energy_kwh: data?.nightEnergy || dailyEnergyKwh,
+            night_energy_kwh: nightEnergyKwh,
             preferred_chemistry: chemistry,
-            night_duration_hours: 13
+            night_duration_hours: systemCalc.calculations.autonomyHours
           });
 
         if (rpcError) {
@@ -90,7 +98,18 @@ const BatterySizing = ({ onNext, onBack, data }) => {
           variant: "destructive"
         });
       } else {
-        setBatteries(batteryRecommendations);
+        // Add calculation details to each recommendation
+        const enrichedBatteries = batteryRecommendations.map(battery => ({
+          ...battery,
+          calculationDetails: {
+            nightEnergyKwh,
+            batteryCapacityAh,
+            recommendedFromCalc: systemCalc.batteryConfig,
+            autonomyHours: systemCalc.calculations.autonomyHours
+          }
+        }));
+        
+        setBatteries(enrichedBatteries);
         toast({
           title: "Battery Options Loaded",
           description: `Found ${batteryRecommendations.length} battery system options for your needs.`,
@@ -110,38 +129,9 @@ const BatterySizing = ({ onNext, onBack, data }) => {
   };
 
   const calculateEnergyNeeds = () => {
-    // Use night energy from the corrected calculation
-    if (data?.nightEnergy !== undefined) {
-      console.log('Using night energy from calculation:', data.nightEnergy);
-      return data.nightEnergy;
-    }
-    
-    // Fallback calculation for night load only
-    if (!data?.appliances || !Array.isArray(data.appliances)) {
-      console.error('No appliances data found:', data);
-      return 0;
-    }
-    
-    const nightEnergyWh = data.appliances.reduce((total, appliance) => {
-      const power = appliance.power || appliance.power_rating || 0;
-      const quantity = appliance.quantity || 1;
-      const hours = appliance.hoursPerDay || 0;
-      
-      // Only calculate for night or both periods
-      if (appliance.period === 'night' || appliance.period === 'both') {
-        const nightHours = appliance.period === 'both' ? hours / 2 : hours;
-        const nightEnergyWh = power * quantity * nightHours;
-        
-        console.log(`Night appliance: ${appliance.name}, Power: ${power}W, Qty: ${quantity}, Hours: ${nightHours}, Night Energy: ${nightEnergyWh}Wh`);
-        
-        return total + nightEnergyWh;
-      }
-      
-      return total;
-    }, 0);
-    
-    console.log(`Total night energy: ${nightEnergyWh}Wh = ${nightEnergyWh / 1000}kWh`);
-    return nightEnergyWh / 1000; // Convert to kWh
+    // Use night energy from the system calculation
+    const systemCalc = data?.systemCalculation || calculateSolarSystem(data?.appliances || []);
+    return systemCalc.nightLoadWh / 1000; // Convert to kWh
   };
 
   const handleBatterySelect = (battery) => {

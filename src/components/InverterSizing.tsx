@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CheckCircle, Zap } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { calculateSolarSystem } from "@/components/utils/solarCalculations";
 
 const InverterSizing = ({ onNext, onBack, data }) => {
   const [selectedInverter, setSelectedInverter] = useState(data?.inverter || null);
@@ -19,16 +20,21 @@ const InverterSizing = ({ onNext, onBack, data }) => {
   const fetchInverters = async () => {
     console.log('fetchInverters called with data:', data);
     try {
-      // Use daytime load for inverter sizing (highest concurrent load)
-      const peakLoadWatts = data?.daytimeLoad || calculateTotalPower();
-      console.log('Peak load for inverter sizing:', peakLoadWatts);
+      // Get calculated system requirements
+      const systemCalc = data?.systemCalculation || calculateSolarSystem(data?.appliances || []);
+      const peakLoadWatts = systemCalc.totalLoadW;
+      const minInverterKva = systemCalc.calculations.minInverterKva;
       
-      // Use new calculation function with merging capability
+      console.log('Peak load for inverter sizing:', peakLoadWatts);
+      console.log('Minimum inverter KVA needed:', minInverterKva);
+      console.log('Recommended inverter:', systemCalc.inverterKva);
+      
+      // Use calculation function with merging capability
       const { data: inverterRecommendations, error } = await supabase
         .rpc('calculate_inverter_with_merging', {
           peak_load_watts: peakLoadWatts,
-          power_factor: 0.8,
-          safety_margin: 0.2
+          power_factor: systemCalc.calculations.powerFactor,
+          safety_margin: systemCalc.calculations.surgeMargin - 1 // Convert from 1.5 to 0.5
         });
 
       if (error) {
@@ -37,7 +43,18 @@ const InverterSizing = ({ onNext, onBack, data }) => {
       }
 
       console.log('Inverter recommendations:', inverterRecommendations);
-      setInverters(inverterRecommendations || []);
+      
+      // Add calculation details to each recommendation
+      const enrichedRecommendations = (inverterRecommendations || []).map(inv => ({
+        ...inv,
+        calculationDetails: {
+          peakLoadWatts,
+          minInverterKva,
+          recommendedFromCalc: systemCalc.inverterKva
+        }
+      }));
+      
+      setInverters(enrichedRecommendations);
     } catch (error) {
       console.error('Error:', error);
     } finally {

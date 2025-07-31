@@ -9,6 +9,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CheckCircle, PanelsTopLeft, Sun, AlertTriangle, Info } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { calculateSolarSystem } from "@/components/utils/solarCalculations";
 
 const PanelSizing = ({ onNext, onBack, data }) => {
   const [selectedState, setSelectedState] = useState('');
@@ -79,10 +80,18 @@ const PanelSizing = ({ onNext, onBack, data }) => {
       setError(null);
       setDebugInfo(null);
       
-      // Calculate daily energy needs
-      const dailyEnergyKwh = calculateEnergyNeeds();
-      console.log('Calculating panel recommendations for:', {
+      // Get calculated system requirements
+      const systemCalc = data?.systemCalculation || calculateSolarSystem(data?.appliances || []);
+      const dailyEnergyKwh = systemCalc.totalDailyEnergyWh / 1000; // Convert to kWh
+      const daytimeLoad = systemCalc.totalLoadW; // Peak instantaneous load
+      const nightEnergy = systemCalc.nightLoadWh / 1000; // Night energy in kWh
+      
+      console.log('System calculation for panels:', {
         dailyEnergyKwh,
+        daytimeLoad,
+        nightEnergy,
+        recommendedPanels: systemCalc.numPanels,
+        panelWatt: systemCalc.panelWatt,
         selectedState,
         sunHours: sunHours[selectedState]
       });
@@ -91,12 +100,9 @@ const PanelSizing = ({ onNext, onBack, data }) => {
         dailyEnergyKwh,
         selectedState,
         sunHours: sunHours[selectedState],
-        appliancesCount: data?.appliances?.length || 0
+        appliancesCount: data?.appliances?.length || 0,
+        systemCalc
       });
-      
-      // Use new panel calculation with separated day/night loads
-      const daytimeLoad = data?.daytimeLoad || 0;
-      const nightEnergy = data?.nightEnergy || dailyEnergyKwh;
       
       console.log('Panel calculation inputs:', { daytimeLoad, nightEnergy, selectedState });
       
@@ -145,7 +151,17 @@ const PanelSizing = ({ onNext, onBack, data }) => {
           variant: "destructive"
         });
       } else {
-        setPanels(recommendations);
+        // Add calculation details to each recommendation
+        const enrichedPanels = recommendations.map(panel => ({
+          ...panel,
+          calculationDetails: {
+            systemCalc,
+            recommendedFromCalc: `${systemCalc.numPanels} × ${systemCalc.panelWatt}W panels`,
+            totalDailyEnergyKwh: dailyEnergyKwh
+          }
+        }));
+        
+        setPanels(enrichedPanels);
         toast({
           title: "Success",
           description: `Found ${recommendations.length} panel recommendation${recommendations.length > 1 ? 's' : ''} for ${selectedState}`,
@@ -165,15 +181,9 @@ const PanelSizing = ({ onNext, onBack, data }) => {
   };
 
   const calculateEnergyNeeds = () => {
-    if (data?.nightEnergy !== undefined) {
-      return data.nightEnergy;
-    }
-    
-    if (!data?.appliances) return 0;
-    return data.appliances.reduce((total, appliance) => {
-      const dailyEnergyWh = appliance.power * appliance.quantity * appliance.hoursPerDay;
-      return total + dailyEnergyWh;
-    }, 0) / 1000; // Convert to kWh
+    // Use total daily energy from the system calculation
+    const systemCalc = data?.systemCalculation || calculateSolarSystem(data?.appliances || []);
+    return systemCalc.totalDailyEnergyWh / 1000; // Convert to kWh
   };
 
   const handleNext = () => {
@@ -253,11 +263,12 @@ const PanelSizing = ({ onNext, onBack, data }) => {
             <Info className="h-4 w-4" />
             <AlertDescription>
               <div className="text-sm space-y-1">
-                <div><strong>Daytime Load:</strong> {data?.daytimeLoad || 0}W</div>
-                <div><strong>Night Energy:</strong> {debugInfo.dailyEnergyKwh.toFixed(2)} kWh</div>
+                <div><strong>Daytime Load:</strong> {debugInfo.systemCalc?.totalLoadW || 0}W</div>
+                <div><strong>Night Energy:</strong> {(debugInfo.systemCalc?.nightLoadWh / 1000 || 0).toFixed(2)} kWh</div>
+                <div><strong>Total Daily Energy:</strong> {debugInfo.dailyEnergyKwh.toFixed(2)} kWh</div>
                 <div><strong>Location:</strong> {debugInfo.selectedState} ({debugInfo.sunHours} sun hours/day)</div>
-                <div><strong>Battery Charging:</strong> {(debugInfo.dailyEnergyKwh * 1000 / debugInfo.sunHours).toFixed(0)}W</div>
-                <div><strong>Total Panel Requirement:</strong> {((data?.daytimeLoad || 0) + (debugInfo.dailyEnergyKwh * 1000 / debugInfo.sunHours)).toFixed(0)}W</div>
+                <div><strong>Recommended:</strong> {debugInfo.systemCalc?.numPanels || 0} × {debugInfo.systemCalc?.panelWatt || 300}W panels</div>
+                <div><strong>Algorithm Total:</strong> {((debugInfo.systemCalc?.numPanels || 0) * (debugInfo.systemCalc?.panelWatt || 300))}W</div>
               </div>
             </AlertDescription>
           </Alert>
@@ -372,14 +383,19 @@ const PanelSizing = ({ onNext, onBack, data }) => {
         {selectedPanel && selectedState && (
           <Card className="bg-green-50 border-green-200">
             <CardContent className="p-4">
-              <h4 className="font-medium text-green-900 mb-2">Panel Calculation</h4>
+              <h4 className="font-medium text-green-900 mb-2">Panel Calculation Summary</h4>
               <div className="text-green-800 text-sm space-y-1">
-                <p><strong>Daytime Load:</strong> {data?.daytimeLoad || 0}W</p>
-                <p><strong>Battery Charging:</strong> {((data?.nightEnergy || 0) * 1000 / (sunHours[selectedState] || 5)).toFixed(0)}W</p>
-                <p><strong>Total Requirement:</strong> {((data?.daytimeLoad || 0) + ((data?.nightEnergy || 0) * 1000 / (sunHours[selectedState] || 5))).toFixed(0)}W</p>
-                <p><strong>Derating Factor:</strong> 80% (accounting for losses)</p>
-                <p><strong>System Losses:</strong> Inverter (90%) + Wiring (95%)</p>
-                <p>Result: {selectedPanel.recommended_quantity} × {selectedPanel.rated_power}W panels generating <strong>{selectedPanel.daily_generation_kwh} kWh/day</strong></p>
+                {selectedPanel.calculationDetails && (
+                  <>
+                    <p><strong>Algorithm Recommendation:</strong> {selectedPanel.calculationDetails.recommendedFromCalc}</p>
+                    <p><strong>Total Daily Energy Need:</strong> {selectedPanel.calculationDetails.totalDailyEnergyKwh.toFixed(2)} kWh</p>
+                  </>
+                )}
+                <p><strong>Database Recommendation:</strong> {selectedPanel.recommended_quantity} × {selectedPanel.rated_power}W panels</p>
+                <p><strong>Total Panel Power:</strong> {selectedPanel.total_watts}W</p>
+                <p><strong>Daily Generation:</strong> {selectedPanel.daily_generation_kwh} kWh/day</p>
+                <p><strong>Derating Factor:</strong> {(selectedPanel.derating_factor * 100).toFixed(0)}% (accounting for losses)</p>
+                <p>✓ System designed for {sunHours[selectedState] || 5} peak sun hours in {selectedState}</p>
               </div>
             </CardContent>
           </Card>

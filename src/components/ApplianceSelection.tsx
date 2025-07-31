@@ -9,6 +9,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Info, Plus, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { calculateSolarSystem } from "@/components/utils/solarCalculations";
 
 const ApplianceSelection = ({ onNext, onBack, data }) => {
   const [appliances, setAppliances] = useState(data?.appliances || []);
@@ -136,36 +137,36 @@ const ApplianceSelection = ({ onNext, onBack, data }) => {
       return;
     }
 
-    // Calculate loads properly for new system
+    // Prepare appliances for calculation
     const appliancesForNext = appliances.map(app => ({
       ...app,
       power: app.power_rating || app.power || 0
     }));
 
-    // Calculate totals for transparent display
-    const daytimeLoad = appliancesForNext
-      .filter(app => app.period === 'day' || app.period === 'both')
-      .reduce((total, app) => total + (app.power * app.quantity), 0);
+    // Use the comprehensive calculation system
+    const systemCalc = calculateSolarSystem(appliancesForNext);
     
-    const nighttimeLoad = appliancesForNext
-      .filter(app => app.period === 'night' || app.period === 'both')
-      .reduce((total, app) => total + (app.power * app.quantity), 0);
+    console.log('Complete system calculation:', systemCalc);
 
-    const nightEnergy = appliancesForNext
-      .filter(app => app.period === 'night' || app.period === 'both')
-      .reduce((total, app) => {
-        const nightHours = app.period === 'both' ? app.hoursPerDay / 2 : app.hoursPerDay;
-        return total + (app.power * app.quantity * nightHours);
-      }, 0) / 1000; // Convert to kWh
+    // Extract key values for next steps
+    const daytimeLoad = systemCalc.totalLoadW; // Peak instantaneous load
+    const nighttimeLoad = systemCalc.totalLoadW; // Same for compatibility
+    const nightEnergy = systemCalc.nightLoadWh / 1000; // Convert to kWh
 
-    console.log('Calculated loads:', { daytimeLoad, nighttimeLoad, nightEnergy });
+    console.log('Calculated loads:', { 
+      daytimeLoad, 
+      nighttimeLoad, 
+      nightEnergy,
+      totalDailyEnergy: systemCalc.totalDailyEnergyWh / 1000
+    });
     
     if (typeof onNext === 'function') {
       onNext({
         appliances: appliancesForNext,
         daytimeLoad,
         nighttimeLoad,
-        nightEnergy
+        nightEnergy,
+        systemCalculation: systemCalc // Include full calculation for reference
       });
     } else {
       console.error('onNext is not a function:', onNext);
