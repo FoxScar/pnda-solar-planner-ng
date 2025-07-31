@@ -74,7 +74,11 @@ const InverterSizing = ({ onNext, onBack, data }) => {
 
   const handleNext = () => {
     if (selectedInverter) {
-      onNext(selectedInverter);
+      // Pass both the inverter and the voltage for battery compatibility
+      onNext({
+        ...selectedInverter,
+        voltage: selectedInverter.voltage_bus // Ensure voltage is available for battery filtering
+      });
     }
   };
 

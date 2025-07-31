@@ -28,9 +28,13 @@ const BatterySizing = ({ onNext, onBack, data }) => {
       const nightEnergyKwh = systemCalc.nightLoadWh / 1000; // Convert to kWh
       const batteryCapacityAh = systemCalc.calculations.batteryCapacityAh;
       
+      // Get system voltage from selected inverter (defaulting to 24V if not available)
+      const systemVoltage = data.inverter?.voltage_bus || data.inverter?.voltage || 24;
+      
       console.log('System calculation for batteries:', {
         nightEnergyKwh,
         batteryCapacityAh,
+        systemVoltage,
         recommendedConfig: systemCalc.batteryConfig
       });
       
@@ -40,10 +44,16 @@ const BatterySizing = ({ onNext, onBack, data }) => {
         return;
       }
       
-      // Get lithium battery options (multiple configurations)
+      toast({
+        title: "Calculating battery options...",
+        description: `Night energy: ${nightEnergyKwh.toFixed(2)} kWh | System: ${systemVoltage}V`,
+      });
+      
+      // Get lithium battery options (multiple configurations) with voltage filtering
       const { data: lithiumOptions, error: lithiumError } = await supabase
         .rpc('calculate_lithium_battery_options', {
           night_energy_kwh: nightEnergyKwh,
+          system_voltage: systemVoltage,
           night_duration_hours: systemCalc.calculations.autonomyHours
         });
 
@@ -59,16 +69,17 @@ const BatterySizing = ({ onNext, onBack, data }) => {
         })));
       }
 
-      // Get traditional battery options (AGM, Flooded)
+      // Get traditional battery options (AGM, Flooded) with voltage configuration
       const traditionalChemistries = ['AGM', 'Flooded'];
       
       for (const chemistry of traditionalChemistries) {
-        console.log(`Fetching ${chemistry} batteries for ${nightEnergyKwh} kWh night energy...`);
+        console.log(`Fetching ${chemistry} batteries for ${nightEnergyKwh} kWh night energy at ${systemVoltage}V...`);
         
         const { data: recommendation, error: rpcError } = await supabase
           .rpc('calculate_traditional_battery_system', {
             night_energy_kwh: nightEnergyKwh,
             preferred_chemistry: chemistry,
+            system_voltage: systemVoltage,
             night_duration_hours: systemCalc.calculations.autonomyHours
           });
 
@@ -104,6 +115,7 @@ const BatterySizing = ({ onNext, onBack, data }) => {
           calculationDetails: {
             nightEnergyKwh,
             batteryCapacityAh,
+            systemVoltage,
             recommendedFromCalc: systemCalc.batteryConfig,
             autonomyHours: systemCalc.calculations.autonomyHours
           }
@@ -112,7 +124,7 @@ const BatterySizing = ({ onNext, onBack, data }) => {
         setBatteries(enrichedBatteries);
         toast({
           title: "Battery Options Loaded",
-          description: `Found ${batteryRecommendations.length} battery system options for your needs.`,
+          description: `Found ${batteryRecommendations.length} systems compatible with ${systemVoltage}V`,
         });
       }
     } catch (error) {
@@ -237,11 +249,12 @@ const BatterySizing = ({ onNext, onBack, data }) => {
           <Battery className="w-5 h-5 text-blue-500" />
           Choose Your Battery System
         </CardTitle>
-        <p className="text-gray-600">
-          Select the battery type that fits your budget and needs:
-        </p>
-        <div className="text-sm text-blue-600 bg-blue-50 p-2 rounded">
-          Night energy requirement: {calculateEnergyNeeds().toFixed(2)} kWh (13 hours: 6 PM - 7 AM)
+        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+          <span>Night energy needs: {calculateEnergyNeeds().toFixed(2)} kWh</span>
+          <span>•</span>
+          <span>System voltage: {data.inverter?.voltage_bus || data.inverter?.voltage || 24}V</span>
+          <span>•</span>
+          <span className="text-green-600">Showing compatible batteries only</span>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">

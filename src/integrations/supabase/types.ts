@@ -343,11 +343,18 @@ export type Database = {
         }[]
       }
       calculate_traditional_battery_system: {
-        Args: {
-          night_energy_kwh: number
-          preferred_chemistry: string
-          night_duration_hours?: number
-        }
+        Args:
+          | {
+              night_energy_kwh: number
+              preferred_chemistry: string
+              night_duration_hours?: number
+            }
+          | {
+              night_energy_kwh: number
+              preferred_chemistry: string
+              system_voltage?: number
+              night_duration_hours?: number
+            }
         Returns: {
           battery_id: string
           chemistry: string

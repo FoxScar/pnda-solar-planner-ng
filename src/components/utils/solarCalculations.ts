@@ -109,7 +109,8 @@ const INVERTER_OPTIONS = [
 export function calculateSolarSystem(
   appliances: Appliance[], 
   customBattery: CustomBattery = {}, 
-  customInverter: string = ''
+  customInverter: string = '',
+  systemVoltage: number = 24
 ): SolarSystemResult {
   // Calculate total loads
   let dayLoad = 0; // Wh (Watt-hours)
@@ -150,7 +151,7 @@ export function calculateSolarSystem(
   // BATTERY SIZING (18-hour autonomy for night load)
   const dod = 0.8; // Depth of discharge (80% for Li-ion)
   const efficiency = 0.9; // System efficiency (90%)
-  const batteryVoltage = customBattery.voltage || 24; // Default 24V system
+  const batteryVoltage = customBattery.voltage || systemVoltage; // Use system voltage instead of hardcoded 24V
   const autonomyHours = 13; // Backup duration for night loads (6pm to 7am)
 
   // Calculate required battery capacity in Ah
