@@ -1,5 +1,6 @@
 
 import { Card, CardContent } from "@/components/ui/card";
+import AdSense from "@/components/AdSense";
 
 interface SystemOverviewProps {
   data: any;
@@ -21,6 +22,17 @@ export const SystemOverview = ({ data }: SystemOverviewProps) => {
             </div>
           </CardContent>
         </Card>
+
+        {/* Ad placement between appliances and system components */}
+        <div className="flex justify-center py-2">
+          <div className="w-full max-w-md">
+            <AdSense 
+              adSlot="1234567890" 
+              adFormat="rectangle" 
+              className="text-center"
+            />
+          </div>
+        </div>
 
         <Card className="bg-blue-50">
           <CardContent className="p-4">
