@@ -180,6 +180,20 @@ const ReviewQuote = ({ onBack, data }) => {
 
         <SystemOverview data={data} />
 
+        {/* Ad placement between system overview and quote generation */}
+        {!showQuote && (
+          <div className="flex justify-center py-4">
+            <div className="w-full max-w-lg">
+              {/* AdSense component would go here - currently placeholder */}
+              <div className="bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg p-4 text-center text-gray-500 text-sm">
+                Advertisement Space
+                <br />
+                <span className="text-xs">Replace with your AdSense code</span>
+              </div>
+            </div>
+          </div>
+        )}
+
         {!showQuote ? (
           <QuoteGenerationCard
             loading={loading}
@@ -188,6 +202,18 @@ const ReviewQuote = ({ onBack, data }) => {
           />
         ) : (
           <>
+            {/* Ad placement between quote generation and quote details */}
+            <div className="flex justify-center py-4">
+              <div className="w-full max-w-lg">
+                {/* AdSense component would go here - currently placeholder */}
+                <div className="bg-gray-100 border-2 border-dashed border-gray-300 rounded-lg p-4 text-center text-gray-500 text-sm">
+                  Advertisement Space
+                  <br />
+                  <span className="text-xs">Replace with your AdSense code</span>
+                </div>
+              </div>
+            </div>
+            
             <QuoteDetails data={data} quoteData={quoteData} />
             <QuoteActions
               data={data}

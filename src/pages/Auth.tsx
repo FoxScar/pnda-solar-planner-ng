@@ -6,14 +6,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Sun, Mail, Lock, User, AlertTriangle } from "lucide-react";
+import { Sun, Mail, Lock, User, AlertTriangle, Phone } from "lucide-react";
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from "@/hooks/use-toast";
+import { validateWhatsAppNumber, formatWhatsAppNumber } from "@/utils/whatsappValidation";
 
 const Auth = () => {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [whatsappNumber, setWhatsappNumber] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { signIn, signUp, user } = useAuth();
@@ -28,9 +30,25 @@ const Auth = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Basic validation
     if (!email || !password) {
       setError('Please fill in all fields');
       return;
+    }
+
+    // WhatsApp validation for sign up
+    if (!isLogin) {
+      if (!whatsappNumber) {
+        setError('WhatsApp number is required for registration');
+        return;
+      }
+      
+      const whatsappValidation = validateWhatsAppNumber(whatsappNumber);
+      if (!whatsappValidation.isValid) {
+        setError(whatsappValidation.message || 'Invalid WhatsApp number');
+        return;
+      }
     }
 
     setLoading(true);
@@ -39,7 +57,7 @@ const Auth = () => {
     try {
       const { error } = isLogin 
         ? await signIn(email, password)
-        : await signUp(email, password);
+        : await signUp(email, password, formatWhatsAppNumber(whatsappNumber));
 
       if (error) {
         if (error.message.includes('Invalid login credentials')) {
@@ -129,6 +147,27 @@ const Auth = () => {
               />
             </div>
 
+            {!isLogin && (
+              <div className="space-y-2">
+                <Label htmlFor="whatsapp" className="flex items-center gap-2">
+                  <Phone className="w-4 h-4" />
+                  WhatsApp Number
+                </Label>
+                <Input
+                  id="whatsapp"
+                  type="tel"
+                  placeholder="+1234567890"
+                  value={whatsappNumber}
+                  onChange={(e) => setWhatsappNumber(e.target.value)}
+                  disabled={loading}
+                  required={!isLogin}
+                />
+                <p className="text-sm text-muted-foreground">
+                  Include country code (e.g., +1 for US, +234 for Nigeria)
+                </p>
+              </div>
+            )}
+
             <Button 
               type="submit"
               disabled={loading}
@@ -146,6 +185,7 @@ const Auth = () => {
                 setError(null);
                 setEmail('');
                 setPassword('');
+                setWhatsappNumber('');
               }}
               disabled={loading}
               className="text-gray-600 hover:text-gray-800"
