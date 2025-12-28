@@ -76,35 +76,51 @@ const ApplianceSelection = ({ onNext, onBack, data }) => {
   };
 
   const updateAppliance = (id, field, value) => {
-    console.log(`Updating appliance ${id}: ${field} = ${value}`);
-    setAppliances(appliances.map(app => 
-      app.id === id ? { ...app, [field]: value } : app
-    ));
+    setAppliances(appliances.map(app => {
+      if (app.id !== id) return app;
+      
+      const updated = { ...app, [field]: value };
+      
+      // Validate day + night hours don't exceed 24
+      if (field === 'dayHours' || field === 'nightHours') {
+        const totalHours = (field === 'dayHours' ? value : updated.dayHours) + 
+                          (field === 'nightHours' ? value : updated.nightHours);
+        if (totalHours > 24) {
+          toast({
+            title: "Invalid hours",
+            description: "Day + Night hours cannot exceed 24 hours.",
+            variant: "destructive"
+          });
+          return app; // Don't update
+        }
+      }
+      
+      // Validate quantity is at least 1
+      if (field === 'quantity' && value < 1) {
+        return { ...app, quantity: 1 };
+      }
+      
+      return updated;
+    }));
   };
 
   const removeAppliance = (id) => {
-    console.log('Removing appliance:', id);
     setAppliances(appliances.filter(app => app.id !== id));
   };
 
   const handleApplianceSelect = (id, selectedName) => {
-    console.log(`Selecting appliance for ${id}: ${selectedName}`);
-    
     const selectedAppliance = availableAppliances.find(app => app.name === selectedName);
-    console.log('Found appliance:', selectedAppliance);
     
     if (selectedAppliance) {
+      // Store power_rating internally but never display it
       setAppliances(appliances.map(app => 
         app.id === id ? { 
           ...app, 
           name: selectedAppliance.name,
-          power_rating: selectedAppliance.power_rating 
+          power_rating: selectedAppliance.power_rating // Internal use only
         } : app
       ));
-      
-      console.log(`Updated appliance ${id} with name: ${selectedAppliance.name}, power: ${selectedAppliance.power_rating}`);
     } else {
-      console.error('Selected appliance not found:', selectedName);
       toast({
         title: "Selection Error",
         description: "The selected appliance could not be found.",
@@ -139,39 +155,36 @@ const ApplianceSelection = ({ onNext, onBack, data }) => {
       return;
     }
 
-    // Prepare appliances for calculation
+    // Prepare appliances for calculation (power_w is internal, never shown to user)
     const appliancesForNext = appliances.map(app => ({
-      ...app,
-      power: app.power_rating || app.power || 0
+      id: app.id,
+      name: app.name,
+      power_w: app.power_rating || 0, // Internal power value
+      quantity: app.quantity,
+      day_hours: app.dayHours,
+      night_hours: app.nightHours
     }));
 
     // Use the comprehensive calculation system
-    const systemCalc = calculateSolarSystem(appliancesForNext);
-    
-    console.log('Complete system calculation:', systemCalc);
+    const systemCalc = calculateSolarSystem(appliances.map(app => ({
+      ...app,
+      power: app.power_rating || 0
+    })));
 
-    // Extract key values for next steps
+    // Extract key values for next steps (all internal, never shown)
     const daytimeLoad = systemCalc.totalLoadW; // Peak instantaneous load
-    const nighttimeLoad = systemCalc.totalLoadW; // Same for compatibility
     const nightEnergy = systemCalc.nightLoadWh / 1000; // Convert to kWh
-
-    console.log('Calculated loads:', { 
-      daytimeLoad, 
-      nighttimeLoad, 
-      nightEnergy,
-      totalDailyEnergy: systemCalc.totalDailyEnergyWh / 1000
-    });
+    const dayEnergy = systemCalc.dayLoadWh / 1000; // Convert to kWh
     
     if (typeof onNext === 'function') {
       onNext({
         appliances: appliancesForNext,
-        daytimeLoad,
-        nighttimeLoad,
-        nightEnergy,
-        systemCalculation: systemCalc // Include full calculation for reference
+        daytimeLoad, // Internal: for inverter sizing
+        nightEnergy, // Internal: for battery sizing
+        dayEnergy,   // Internal: for panel sizing
+        systemCalculation: systemCalc
       });
     } else {
-      console.error('onNext is not a function:', onNext);
       toast({
         title: "Navigation Error",
         description: "Unable to proceed to next step. Please try again.",
@@ -326,10 +339,11 @@ const ApplianceSelection = ({ onNext, onBack, data }) => {
                   </div>
                 </div>
 
-                {appliance.name && (
-                  <div className="bg-blue-50 p-3 rounded-md">
-                    <p className="text-sm text-blue-700">
-                      Selected: {appliance.name}
+                {/* Validation feedback for hours */}
+                {(appliance.dayHours + appliance.nightHours) > 20 && (
+                  <div className="bg-amber-50 p-3 rounded-md">
+                    <p className="text-sm text-amber-700">
+                      ⚠️ Total usage: {appliance.dayHours + appliance.nightHours} hours/day
                     </p>
                   </div>
                 )}
