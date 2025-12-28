@@ -7,7 +7,7 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instanciate createClient with right options
+  // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "12.2.3 (519615d)"
@@ -20,7 +20,7 @@ export type Database = {
           assigned_by: string | null
           created_at: string
           id: string
-          ip_address: unknown | null
+          ip_address: unknown
           role_assigned: string
           user_agent: string | null
           user_id: string
@@ -30,7 +30,7 @@ export type Database = {
           assigned_by?: string | null
           created_at?: string
           id?: string
-          ip_address?: unknown | null
+          ip_address?: unknown
           role_assigned: string
           user_agent?: string | null
           user_id: string
@@ -40,7 +40,7 @@ export type Database = {
           assigned_by?: string | null
           created_at?: string
           id?: string
-          ip_address?: unknown | null
+          ip_address?: unknown
           role_assigned?: string
           user_agent?: string | null
           user_id?: string
@@ -283,21 +283,18 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      assign_admin_role: {
-        Args: { target_user_id: string }
-        Returns: Json
-      }
+      assign_admin_role: { Args: { target_user_id: string }; Returns: Json }
       bootstrap_initial_admin: {
-        Args: { target_user_id: string; bootstrap_key?: string }
+        Args: { bootstrap_key?: string; target_user_id: string }
         Returns: Json
       }
       calculate_complete_system: {
-        Args: { appliances_data: Json; state_name: string; preferences?: Json }
+        Args: { appliances_data: Json; preferences?: Json; state_name: string }
         Returns: {
           daily_energy_kwh: number
           peak_load_watts: number
-          recommended_inverter: Json
           recommended_battery: Json
+          recommended_inverter: Json
           recommended_panels: Json
           total_system_cost: number
         }[]
@@ -310,117 +307,141 @@ export type Database = {
         }
         Returns: {
           inverter_id: string
-          model_name: string
+          is_merged: boolean
           kva_rating: number
-          voltage_bus: number
+          merge_configuration: string
+          model_name: string
+          quantity: number
+          recommended: boolean
           surge_capacity: string
           unit_cost: number
           va_requirement: number
-          recommended: boolean
-          is_merged: boolean
-          merge_configuration: string
-          quantity: number
+          voltage_bus: number
         }[]
       }
-      calculate_lithium_battery_options: {
-        Args:
-          | { night_energy_kwh: number; night_duration_hours?: number }
-          | {
+      calculate_lithium_battery_options:
+        | {
+            Args: { night_duration_hours?: number; night_energy_kwh: number }
+            Returns: {
+              battery_id: string
+              capacity_kwh: number
+              chemistry: string
+              configuration: string
+              is_optimal: boolean
+              pros: string[]
+              recommended_quantity: number
+              total_capacity_kwh: number
+              total_cost: number
+              voltage: number
+            }[]
+          }
+        | {
+            Args: {
+              night_duration_hours?: number
               night_energy_kwh: number
               system_voltage?: number
-              night_duration_hours?: number
             }
-        Returns: {
-          battery_id: string
-          chemistry: string
-          voltage: number
-          capacity_kwh: number
-          recommended_quantity: number
-          total_capacity_kwh: number
-          total_cost: number
-          configuration: string
-          pros: string[]
-          is_optimal: boolean
-        }[]
-      }
+            Returns: {
+              battery_id: string
+              capacity_kwh: number
+              chemistry: string
+              configuration: string
+              is_optimal: boolean
+              pros: string[]
+              recommended_quantity: number
+              total_capacity_kwh: number
+              total_cost: number
+              voltage: number
+            }[]
+          }
       calculate_panel_system: {
         Args: {
           daytime_load_watts: number
           night_energy_kwh: number
+          preferred_panel_model?: string
           state_name: string
           sun_hours_per_day?: number
-          preferred_panel_model?: string
         }
         Returns: {
-          panel_id: string
-          model_name: string
-          rated_power: number
-          recommended_quantity: number
-          total_watts: number
-          total_cost: number
+          calculation_breakdown: Json
           daily_generation_kwh: number
           derating_factor: number
-          calculation_breakdown: Json
+          model_name: string
+          panel_id: string
+          rated_power: number
+          recommended_quantity: number
+          total_cost: number
+          total_watts: number
         }[]
       }
-      calculate_traditional_battery_system: {
-        Args:
-          | {
+      calculate_traditional_battery_system:
+        | {
+            Args: {
+              night_duration_hours?: number
               night_energy_kwh: number
               preferred_chemistry: string
-              night_duration_hours?: number
             }
-          | {
+            Returns: {
+              battery_id: string
+              capacity_kwh: number
+              chemistry: string
+              configuration: string
+              pros: string[]
+              recommended_quantity: number
+              total_capacity_kwh: number
+              total_cost: number
+              voltage: number
+            }[]
+          }
+        | {
+            Args: {
+              night_duration_hours?: number
               night_energy_kwh: number
               preferred_chemistry: string
               system_voltage?: number
-              night_duration_hours?: number
             }
-        Returns: {
-          battery_id: string
-          chemistry: string
-          voltage: number
-          capacity_kwh: number
-          recommended_quantity: number
-          total_capacity_kwh: number
-          total_cost: number
-          configuration: string
-          pros: string[]
-        }[]
-      }
+            Returns: {
+              battery_id: string
+              capacity_kwh: number
+              chemistry: string
+              configuration: string
+              pros: string[]
+              recommended_quantity: number
+              total_capacity_kwh: number
+              total_cost: number
+              voltage: number
+            }[]
+          }
       generate_quote_data: {
         Args: { selected_components: Json }
         Returns: {
-          inverter_cost: number
           battery_cost: number
-          panel_cost: number
-          subtotal: number
           installation_cost: number
-          total_cost: number
+          inverter_cost: number
+          panel_cost: number
           quote_details: Json
+          subtotal: number
+          total_cost: number
         }[]
       }
       get_appliances_by_category: {
         Args: { category_filter: string }
         Returns: {
+          category: string
           id: string
+          is_energy_efficient: boolean
           name: string
           power_rating: number
-          category: string
-          is_energy_efficient: boolean
         }[]
       }
       has_role: {
         Args: {
-          _user_id: string
           _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
         }
         Returns: boolean
       }
-      needs_initial_admin: {
-        Args: Record<PropertyKey, never>
-        Returns: boolean
-      }
+      needs_initial_admin: { Args: never; Returns: boolean }
     }
     Enums: {
       app_role: "admin" | "user"
