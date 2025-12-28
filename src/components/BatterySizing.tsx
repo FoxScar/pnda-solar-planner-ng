@@ -6,7 +6,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CheckCircle, Battery, AlertTriangle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { calculateSolarSystem } from "@/components/utils/solarCalculations";
+
+const SAFETY_MARGIN = 1.30; // 30% safety margin per spec
 
 const BatterySizing = ({ onNext, onBack, data }) => {
   const [selectedBattery, setSelectedBattery] = useState(data?.battery || null);
@@ -23,20 +24,14 @@ const BatterySizing = ({ onNext, onBack, data }) => {
     try {
       setError(null);
       
-      // Get calculated system requirements
-      const systemCalc = data?.systemCalculation || calculateSolarSystem(data?.appliances || []);
-      const nightEnergyKwh = systemCalc.nightLoadWh / 1000; // Convert to kWh
-      const batteryCapacityAh = systemCalc.calculations.batteryCapacityAh;
+      // Calculate night energy only (per spec)
+      const nightEnergyKwh = calculateNightEnergy();
       
-      // Get system voltage from selected inverter (defaulting to 24V if not available)
+      // Apply 30% safety margin
+      const nightEnergyWithMargin = nightEnergyKwh * SAFETY_MARGIN;
+      
+      // Get system voltage from selected inverter
       const systemVoltage = data.inverter?.voltage_bus || data.inverter?.voltage || 24;
-      
-      console.log('System calculation for batteries:', {
-        nightEnergyKwh,
-        batteryCapacityAh,
-        systemVoltage,
-        recommendedConfig: systemCalc.batteryConfig
-      });
       
       if (nightEnergyKwh <= 0) {
         setError('No night energy requirements found. Please go back and select appliances used at night.');
@@ -44,92 +39,68 @@ const BatterySizing = ({ onNext, onBack, data }) => {
         return;
       }
       
-      toast({
-        title: "Calculating battery options...",
-        description: `Night energy: ${nightEnergyKwh.toFixed(2)} kWh | System: ${systemVoltage}V`,
-      });
-      
-      // Get lithium battery options (multiple configurations) with voltage filtering
+      // Get lithium battery options with voltage filtering
       const { data: lithiumOptions, error: lithiumError } = await supabase
         .rpc('calculate_lithium_battery_options', {
-          night_energy_kwh: nightEnergyKwh,
+          night_energy_kwh: nightEnergyWithMargin,
           system_voltage: systemVoltage,
-          night_duration_hours: systemCalc.calculations.autonomyHours
+          night_duration_hours: 13
         });
 
       const batteryRecommendations = [];
 
-      if (lithiumError) {
-        console.error('Error fetching lithium batteries:', lithiumError);
-      } else if (lithiumOptions && lithiumOptions.length > 0) {
-        console.log('Found lithium options:', lithiumOptions);
+      if (!lithiumError && lithiumOptions && lithiumOptions.length > 0) {
         batteryRecommendations.push(...lithiumOptions.map(option => ({
           ...option,
           recommended: option.is_optimal
         })));
       }
 
-      // Get traditional battery options (AGM, Flooded) with voltage configuration
+      // Get traditional battery options (AGM, Flooded)
       const traditionalChemistries = ['AGM', 'Flooded'];
       
       for (const chemistry of traditionalChemistries) {
-        console.log(`Fetching ${chemistry} batteries for ${nightEnergyKwh} kWh night energy at ${systemVoltage}V...`);
-        
         const { data: recommendation, error: rpcError } = await supabase
           .rpc('calculate_traditional_battery_system', {
-            night_energy_kwh: nightEnergyKwh,
+            night_energy_kwh: nightEnergyWithMargin,
             preferred_chemistry: chemistry,
             system_voltage: systemVoltage,
-            night_duration_hours: systemCalc.calculations.autonomyHours
+            night_duration_hours: 13
           });
 
-        if (rpcError) {
-          console.error(`Error fetching ${chemistry} batteries:`, rpcError);
-          continue;
-        }
-
-        if (recommendation && recommendation.length > 0) {
-          console.log(`Found ${chemistry} recommendation:`, recommendation[0]);
+        if (!rpcError && recommendation && recommendation.length > 0) {
           batteryRecommendations.push({
             ...recommendation[0],
-            recommended: false // Traditional batteries not preferred
+            recommended: false
           });
-        } else {
-          console.log(`No ${chemistry} batteries found for energy requirements`);
         }
       }
-
-      console.log('All battery recommendations:', batteryRecommendations);
       
       if (batteryRecommendations.length === 0) {
         setError('No suitable battery systems found for your energy requirements. Please contact support.');
         toast({
           title: "No Batteries Found",
-          description: "We couldn't find suitable battery systems for your energy needs. Please try reducing your appliance usage or contact support.",
+          description: "We couldn't find suitable battery systems for your needs.",
           variant: "destructive"
         });
       } else {
-        // Add calculation details to each recommendation
-        const enrichedBatteries = batteryRecommendations.map(battery => ({
-          ...battery,
-          calculationDetails: {
-            nightEnergyKwh,
-            batteryCapacityAh,
-            systemVoltage,
-            recommendedFromCalc: systemCalc.batteryConfig,
-            autonomyHours: systemCalc.calculations.autonomyHours
-          }
-        }));
+        // Sort by cost to show minimum size first (cheapest = minimum for requirement)
+        batteryRecommendations.sort((a, b) => a.total_cost - b.total_cost);
         
-        setBatteries(enrichedBatteries);
+        // Mark the cheapest option as recommended (minimum size)
+        if (batteryRecommendations.length > 0) {
+          batteryRecommendations[0].recommended = true;
+        }
+        
+        setBatteries(batteryRecommendations);
         toast({
           title: "Battery Options Loaded",
-          description: `Found ${batteryRecommendations.length} systems compatible with ${systemVoltage}V`,
+          description: `Found ${batteryRecommendations.length} compatible systems`,
         });
       }
     } catch (error) {
       console.error('Error in fetchBatteries:', error);
-      setError('Failed to load battery options. Please try again or contact support.');
+      setError('Failed to load battery options. Please try again.');
       toast({
         title: "Loading Error",
         description: "Failed to load battery options. Please try again.",
@@ -140,19 +111,28 @@ const BatterySizing = ({ onNext, onBack, data }) => {
     }
   };
 
-  const calculateEnergyNeeds = () => {
-    // Use night energy from the system calculation
-    const systemCalc = data?.systemCalculation || calculateSolarSystem(data?.appliances || []);
-    return systemCalc.nightLoadWh / 1000; // Convert to kWh
+  const calculateNightEnergy = () => {
+    // Use night energy from system calculation or calculate directly
+    if (data?.nightEnergy) {
+      return data.nightEnergy;
+    }
+    
+    if (!data?.appliances) return 0;
+    
+    // Calculate: sum(power × quantity × night hours) / 1000 for kWh
+    return data.appliances.reduce((total, appliance) => {
+      const power = appliance.power_w || appliance.power_rating || appliance.power || 0;
+      const quantity = appliance.quantity || 1;
+      const nightHours = appliance.night_hours || appliance.nightHours || 0;
+      return total + (power * quantity * nightHours / 1000);
+    }, 0);
   };
 
   const handleBatterySelect = (battery) => {
-    console.log('Battery selected:', battery);
     setSelectedBattery(battery);
   };
 
   const handleNext = () => {
-    console.log('Next button clicked, selected battery:', selectedBattery);
     if (selectedBattery) {
       onNext(selectedBattery);
     }
@@ -185,8 +165,7 @@ const BatterySizing = ({ onNext, onBack, data }) => {
         <CardContent className="p-6">
           <div className="text-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto mb-4"></div>
-            <p>Loading battery options...</p>
-            <p className="text-sm text-gray-500 mt-2">Analyzing your energy needs...</p>
+            <p>Finding the best battery system for you...</p>
           </div>
         </CardContent>
       </Card>
@@ -206,7 +185,7 @@ const BatterySizing = ({ onNext, onBack, data }) => {
               Try Again
             </Button>
             <Button onClick={onBack} variant="ghost">
-              Go Back to Appliances
+              Go Back to Inverter
             </Button>
           </div>
         </CardContent>
@@ -225,17 +204,12 @@ const BatterySizing = ({ onNext, onBack, data }) => {
             </AlertDescription>
           </Alert>
           <div className="text-center space-y-4">
-            <p className="text-gray-600">
-              Night energy requirement: {calculateEnergyNeeds().toFixed(2)} kWh
-            </p>
-            <div className="space-x-4">
-              <Button onClick={fetchBatteries} variant="outline">
-                Retry Loading
-              </Button>
-              <Button onClick={onBack} variant="ghost">
-                Adjust Appliances
-              </Button>
-            </div>
+            <Button onClick={fetchBatteries} variant="outline">
+              Retry Loading
+            </Button>
+            <Button onClick={onBack} variant="ghost">
+              Adjust Appliances
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -249,13 +223,7 @@ const BatterySizing = ({ onNext, onBack, data }) => {
           <Battery className="w-5 h-5 text-blue-500" />
           Choose Your Battery System
         </CardTitle>
-        <div className="flex items-center gap-4 text-sm text-muted-foreground">
-          <span>Night energy needs: {calculateEnergyNeeds().toFixed(2)} kWh</span>
-          <span>•</span>
-          <span>System voltage: {data.inverter?.voltage_bus || data.inverter?.voltage || 24}V</span>
-          <span>•</span>
-          <span className="text-green-600">Showing compatible batteries only</span>
-        </div>
+        <p className="text-gray-600">Based on your nighttime usage, we recommend the highlighted option:</p>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid gap-4">
@@ -281,7 +249,7 @@ const BatterySizing = ({ onNext, onBack, data }) => {
                     </Badge>
                     {battery.recommended && (
                       <Badge className="bg-green-100 text-green-700 border-green-200">
-                        Recommended
+                        Best Value
                       </Badge>
                     )}
                     {selectedBattery?.battery_id === battery.battery_id && (
@@ -298,20 +266,13 @@ const BatterySizing = ({ onNext, onBack, data }) => {
                 
                 <div className="mb-3">
                   <h3 className="font-semibold text-lg mb-1">{battery.configuration}</h3>
-                  <div className="text-sm space-y-1">
-                    <div>
-                      <span className="font-medium">Total Capacity:</span>
-                      <span className="text-gray-600 ml-1">{battery.total_capacity_kwh}kWh</span>
-                    </div>
-                    <div>
-                      <span className="font-medium">Quantity:</span>
-                      <span className="text-gray-600 ml-1">{battery.recommended_quantity} units</span>
-                    </div>
+                  <div className="text-sm text-gray-600">
+                    <span><strong>Quantity:</strong> {battery.recommended_quantity} units</span>
                   </div>
                 </div>
                 
                 <div className="space-y-1">
-                  {battery.pros.map((pro, index) => (
+                  {battery.pros && battery.pros.map((pro, index) => (
                     <div key={index} className="flex items-center gap-2 text-sm text-gray-600">
                       <div className="w-1.5 h-1.5 bg-green-500 rounded-full"></div>
                       {pro}
@@ -329,13 +290,8 @@ const BatterySizing = ({ onNext, onBack, data }) => {
               <h4 className="font-medium text-purple-900 mb-2">Your Selection</h4>
               <div className="text-purple-800 text-sm space-y-1">
                 <p><strong>Selected:</strong> {selectedBattery.configuration}</p>
-                <p><strong>Total Capacity:</strong> {selectedBattery.total_capacity_kwh}kWh</p>
-                <p><strong>Your Night Energy:</strong> {calculateEnergyNeeds().toFixed(2)} kWh</p>
                 <p><strong>Battery Type:</strong> {selectedBattery.chemistry}</p>
-                {selectedBattery.chemistry === 'Lithium' && selectedBattery.is_optimal && (
-                  <p className="text-green-600"><strong>✓ Most cost-effective lithium option</strong></p>
-                )}
-                <p>✓ Sufficient capacity for your nighttime energy needs.</p>
+                <p>✓ Sufficient capacity for your nighttime power needs (with 30% safety margin)</p>
               </div>
             </CardContent>
           </Card>

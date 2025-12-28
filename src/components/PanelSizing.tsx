@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,10 +5,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { CheckCircle, PanelsTopLeft, Sun, AlertTriangle, Info } from "lucide-react";
+import { CheckCircle, PanelsTopLeft, AlertTriangle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { calculateSolarSystem } from "@/components/utils/solarCalculations";
+
+const HEADROOM_FACTOR = 1.20; // 20% headroom per spec
 
 const PanelSizing = ({ onNext, onBack, data }) => {
   const [selectedState, setSelectedState] = useState('');
@@ -19,7 +19,6 @@ const PanelSizing = ({ onNext, onBack, data }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [panelsLoading, setPanelsLoading] = useState(false);
-  const [debugInfo, setDebugInfo] = useState(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -35,7 +34,6 @@ const PanelSizing = ({ onNext, onBack, data }) => {
   const fetchSunHours = async () => {
     try {
       setError(null);
-      console.log('Fetching sun hours data...');
       
       const { data: sunHoursData, error } = await supabase
         .from('sun_hours')
@@ -44,18 +42,15 @@ const PanelSizing = ({ onNext, onBack, data }) => {
 
       if (error) {
         console.error('Error fetching sun hours:', error);
-        setError('Unable to load solar data for different states. Please try again.');
+        setError('Unable to load location data. Please try again.');
         toast({
           title: "Error",
-          description: "Failed to load solar data. Please refresh the page and try again.",
+          description: "Failed to load location data. Please refresh the page.",
           variant: "destructive"
         });
         return;
       }
-
-      console.log('Sun hours data loaded:', sunHoursData?.length || 0, 'states');
       
-      // Convert to object for easy lookup
       const sunHoursMap = {};
       (sunHoursData || []).forEach(item => {
         sunHoursMap[item.state] = item.hours;
@@ -63,12 +58,7 @@ const PanelSizing = ({ onNext, onBack, data }) => {
       setSunHours(sunHoursMap);
     } catch (error) {
       console.error('Unexpected error:', error);
-      setError('An unexpected error occurred while loading solar data.');
-      toast({
-        title: "Connection Error",
-        description: "Please check your internet connection and try again.",
-        variant: "destructive"
-      });
+      setError('An unexpected error occurred while loading location data.');
     } finally {
       setLoading(false);
     }
@@ -78,55 +68,32 @@ const PanelSizing = ({ onNext, onBack, data }) => {
     try {
       setPanelsLoading(true);
       setError(null);
-      setDebugInfo(null);
       
-      // Get calculated system requirements
-      const systemCalc = data?.systemCalculation || calculateSolarSystem(data?.appliances || []);
-      const dailyEnergyKwh = systemCalc.totalDailyEnergyWh / 1000; // Convert to kWh
-      const daytimeLoad = systemCalc.totalLoadW; // Peak instantaneous load
-      const nightEnergy = systemCalc.nightLoadWh / 1000; // Night energy in kWh
+      // Calculate requirements per spec:
+      // 1. Panels for daytime load
+      // 2. Panels for battery recharge
+      // 3. Take maximum + 20% headroom
       
-      console.log('System calculation for panels:', {
-        dailyEnergyKwh,
-        daytimeLoad,
-        nightEnergy,
-        recommendedPanels: systemCalc.numPanels,
-        panelWatt: systemCalc.panelWatt,
-        selectedState,
-        sunHours: sunHours[selectedState]
-      });
-
-      setDebugInfo({
-        dailyEnergyKwh,
-        selectedState,
-        sunHours: sunHours[selectedState],
-        appliancesCount: data?.appliances?.length || 0,
-        systemCalc
-      });
+      const daytimeLoadWatts = calculateDaytimeLoad();
+      const nightEnergyKwh = calculateNightEnergy();
+      const locationSunHours = sunHours[selectedState] || 5.0;
       
-      console.log('Panel calculation inputs:', { daytimeLoad, nightEnergy, selectedState });
-      
-      // Get panel recommendations using new RPC function
+      // Get panel recommendations using RPC function
       const { data: panelRecommendation, error: panelError } = await supabase
         .rpc('calculate_panel_system', {
-          daytime_load_watts: daytimeLoad,
-          night_energy_kwh: nightEnergy,
+          daytime_load_watts: Math.ceil(daytimeLoadWatts * HEADROOM_FACTOR),
+          night_energy_kwh: nightEnergyKwh * HEADROOM_FACTOR,
           state_name: selectedState,
-          sun_hours_per_day: sunHours[selectedState] || 5.0,
-          preferred_panel_model: null // Let it choose the best option
+          sun_hours_per_day: locationSunHours,
+          preferred_panel_model: null
         });
-
-      console.log('Panel calculation results:', {
-        panelRecommendation,
-        panelError
-      });
 
       if (panelError) {
         console.error('Panel calculation error:', panelError);
-        setError(`Unable to calculate panel recommendations: ${panelError?.message}`);
+        setError('Unable to calculate panel recommendations. Please try again.');
         toast({
           title: "Calculation Error",
-          description: "Unable to generate panel recommendations. Please try again or contact support.",
+          description: "Unable to generate panel recommendations.",
           variant: "destructive"
         });
         return;
@@ -141,59 +108,60 @@ const PanelSizing = ({ onNext, onBack, data }) => {
         });
       }
 
-      console.log('Final recommendations:', recommendations);
-
       if (recommendations.length === 0) {
-        setError('No suitable panel options found for your requirements in this state. This may be due to insufficient panel data or very low energy requirements.');
+        setError('No suitable panel options found for your requirements. Please try a different location.');
         toast({
           title: "No Recommendations",
-          description: "No suitable panels found for your location. Please try a different state or check your appliance selection.",
+          description: "No suitable panels found for your location.",
           variant: "destructive"
         });
       } else {
-        // Add calculation details to each recommendation
-        const enrichedPanels = recommendations.map(panel => ({
-          ...panel,
-          calculationDetails: {
-            systemCalc,
-            recommendedFromCalc: `${systemCalc.numPanels} × ${systemCalc.panelWatt}W panels`,
-            totalDailyEnergyKwh: dailyEnergyKwh
-          }
-        }));
-        
-        setPanels(enrichedPanels);
+        setPanels(recommendations);
         toast({
           title: "Success",
-          description: `Found ${recommendations.length} panel recommendation${recommendations.length > 1 ? 's' : ''} for ${selectedState}`,
+          description: `Found panel recommendation for ${selectedState}`,
         });
       }
     } catch (error) {
       console.error('Error fetching panel recommendations:', error);
-      setError(`An error occurred while calculating panel recommendations: ${error.message}`);
-      toast({
-        title: "Calculation Error",
-        description: "Unable to calculate panel recommendations. Please try again.",
-        variant: "destructive"
-      });
+      setError('An error occurred while calculating panel recommendations.');
     } finally {
       setPanelsLoading(false);
     }
   };
 
-  const calculateEnergyNeeds = () => {
-    // Use total daily energy from the system calculation
-    const systemCalc = data?.systemCalculation || calculateSolarSystem(data?.appliances || []);
-    return systemCalc.totalDailyEnergyWh / 1000; // Convert to kWh
+  const calculateDaytimeLoad = () => {
+    if (!data?.appliances) return 0;
+    
+    return data.appliances.reduce((total, appliance) => {
+      const power = appliance.power_w || appliance.power_rating || appliance.power || 0;
+      const quantity = appliance.quantity || 1;
+      const dayHours = appliance.day_hours || appliance.dayHours || 0;
+      if (dayHours > 0) {
+        return total + (power * quantity);
+      }
+      return total;
+    }, 0);
+  };
+
+  const calculateNightEnergy = () => {
+    if (data?.nightEnergy) return data.nightEnergy;
+    
+    if (!data?.appliances) return 0;
+    
+    return data.appliances.reduce((total, appliance) => {
+      const power = appliance.power_w || appliance.power_rating || appliance.power || 0;
+      const quantity = appliance.quantity || 1;
+      const nightHours = appliance.night_hours || appliance.nightHours || 0;
+      return total + (power * quantity * nightHours / 1000);
+    }, 0);
   };
 
   const handleNext = () => {
     if (selectedState && selectedPanel) {
       onNext({ 
         state: selectedState, 
-        panels: {
-          ...selectedPanel,
-          sunHours: sunHours[selectedState] || 5.0
-        }
+        panels: selectedPanel
       });
     }
   };
@@ -206,17 +174,13 @@ const PanelSizing = ({ onNext, onBack, data }) => {
     }).format(price);
   };
 
-  const getSunHours = (state) => {
-    return sunHours[state] || 5.0;
-  };
-
   if (loading) {
     return (
       <Card className="w-full max-w-2xl mx-auto">
         <CardContent className="p-6">
           <div className="text-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto mb-4"></div>
-            <p>Loading solar data...</p>
+            <p>Loading location data...</p>
           </div>
         </CardContent>
       </Card>
@@ -248,7 +212,7 @@ const PanelSizing = ({ onNext, onBack, data }) => {
           <PanelsTopLeft className="w-5 h-5 text-yellow-500" />
           Choose Your Solar Panels
         </CardTitle>
-        <p className="text-gray-600">First, tell us your location to optimize panel recommendations:</p>
+        <p className="text-gray-600">Select your location to get the best panel recommendation:</p>
       </CardHeader>
       <CardContent className="space-y-6">
         {error && (
@@ -258,29 +222,13 @@ const PanelSizing = ({ onNext, onBack, data }) => {
           </Alert>
         )}
 
-        {debugInfo && (
-          <Alert>
-            <Info className="h-4 w-4" />
-            <AlertDescription>
-              <div className="text-sm space-y-1">
-                <div><strong>Daytime Load:</strong> {debugInfo.systemCalc?.totalLoadW || 0}W</div>
-                <div><strong>Night Energy:</strong> {(debugInfo.systemCalc?.nightLoadWh / 1000 || 0).toFixed(2)} kWh</div>
-                <div><strong>Total Daily Energy:</strong> {debugInfo.dailyEnergyKwh.toFixed(2)} kWh</div>
-                <div><strong>Location:</strong> {debugInfo.selectedState} ({debugInfo.sunHours} sun hours/day)</div>
-                <div><strong>Recommended:</strong> {debugInfo.systemCalc?.numPanels || 0} × {debugInfo.systemCalc?.panelWatt || 300}W panels</div>
-                <div><strong>Algorithm Total:</strong> {((debugInfo.systemCalc?.numPanels || 0) * (debugInfo.systemCalc?.panelWatt || 300))}W</div>
-              </div>
-            </AlertDescription>
-          </Alert>
-        )}
-
         <div>
           <Label htmlFor="state">Your State</Label>
           <Select onValueChange={setSelectedState} disabled={loading}>
             <SelectTrigger>
               <SelectValue placeholder="Select your state" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="bg-white border shadow-lg z-50">
               {Object.keys(sunHours).map((state) => (
                 <SelectItem key={state} value={state}>
                   {state}
@@ -290,26 +238,22 @@ const PanelSizing = ({ onNext, onBack, data }) => {
           </Select>
           {selectedState && (
             <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-              <div className="flex items-center gap-2 text-sm text-yellow-800">
-                <Sun className="w-4 h-4" />
-                <span>
-                  <strong>{selectedState}</strong> gets approximately{' '}
-                  <strong>{getSunHours(selectedState)} hours</strong> of peak sun daily
-                </span>
-              </div>
+              <p className="text-sm text-yellow-800">
+                <strong>{selectedState}</strong> - Optimal panel configuration selected for your location
+              </p>
             </div>
           )}
         </div>
 
         {selectedState && (
           <div className="space-y-4">
-            <h3 className="font-semibold text-lg">Recommended Panel Options:</h3>
+            <h3 className="font-semibold text-lg">Recommended Panel System:</h3>
             
             {panelsLoading ? (
               <Card className="p-4">
                 <div className="text-center">
                   <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-orange-500 mx-auto mb-2"></div>
-                  <p className="text-sm text-gray-600">Calculating panel recommendations...</p>
+                  <p className="text-sm text-gray-600">Finding the best panels for you...</p>
                 </div>
               </Card>
             ) : panels.length > 0 ? (
@@ -349,23 +293,8 @@ const PanelSizing = ({ onNext, onBack, data }) => {
                         </div>
                       </div>
                       
-                      <div className="grid grid-cols-4 gap-4 text-sm">
-                        <div>
-                          <span className="font-medium block">Quantity:</span>
-                          <span className="text-gray-600">{panel.recommended_quantity} panels</span>
-                        </div>
-                        <div>
-                          <span className="font-medium block">Total Power:</span>
-                          <span className="text-gray-600">{panel.total_watts}W</span>
-                        </div>
-                        <div>
-                          <span className="font-medium block">Unit Power:</span>
-                          <span className="text-gray-600">{panel.rated_power}W</span>
-                        </div>
-                        <div>
-                          <span className="font-medium block">Efficiency:</span>
-                          <span className="text-gray-600">{(panel.derating_factor * 100).toFixed(0)}%</span>
-                        </div>
+                      <div className="flex flex-wrap gap-4 text-sm text-gray-600">
+                        <span><strong>Quantity:</strong> {panel.recommended_quantity} panels</span>
                       </div>
                     </CardContent>
                   </Card>
@@ -374,7 +303,7 @@ const PanelSizing = ({ onNext, onBack, data }) => {
             ) : !panelsLoading && (
               <Card className="p-4 text-center text-gray-500">
                 <p>No panel recommendations available for this location.</p>
-                <p className="text-sm mt-1">Please try selecting a different state or check your appliance selection.</p>
+                <p className="text-sm mt-1">Please try selecting a different state.</p>
               </Card>
             )}
           </div>
@@ -383,19 +312,11 @@ const PanelSizing = ({ onNext, onBack, data }) => {
         {selectedPanel && selectedState && (
           <Card className="bg-green-50 border-green-200">
             <CardContent className="p-4">
-              <h4 className="font-medium text-green-900 mb-2">Panel Calculation Summary</h4>
+              <h4 className="font-medium text-green-900 mb-2">Your Selection</h4>
               <div className="text-green-800 text-sm space-y-1">
-                {selectedPanel.calculationDetails && (
-                  <>
-                    <p><strong>Algorithm Recommendation:</strong> {selectedPanel.calculationDetails.recommendedFromCalc}</p>
-                    <p><strong>Total Daily Energy Need:</strong> {selectedPanel.calculationDetails.totalDailyEnergyKwh.toFixed(2)} kWh</p>
-                  </>
-                )}
-                <p><strong>Database Recommendation:</strong> {selectedPanel.recommended_quantity} × {selectedPanel.rated_power}W panels</p>
-                <p><strong>Total Panel Power:</strong> {selectedPanel.total_watts}W</p>
-                <p><strong>Daily Generation:</strong> {selectedPanel.daily_generation_kwh} kWh/day</p>
-                <p><strong>Derating Factor:</strong> {(selectedPanel.derating_factor * 100).toFixed(0)}% (accounting for losses)</p>
-                <p>✓ System designed for {sunHours[selectedState] || 5} peak sun hours in {selectedState}</p>
+                <p><strong>Selected:</strong> {selectedPanel.recommended_quantity} × {selectedPanel.model_name}</p>
+                <p><strong>Location:</strong> {selectedState}</p>
+                <p>✓ System designed to power your daytime loads and recharge batteries fully</p>
               </div>
             </CardContent>
           </Card>
