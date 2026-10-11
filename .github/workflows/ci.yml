@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: panda
+          POSTGRES_PASSWORD: panda
+          POSTGRES_DB: pandasolution_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U panda -d pandasolution_test"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgres://panda:panda@localhost:5432/pandasolution_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Check migrations match the schema
+        run: npx drizzle-kit check
+      - name: Test
+        run: npm test
+      - name: Build
+        run: npm run build

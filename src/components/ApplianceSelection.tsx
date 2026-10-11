@@ -7,13 +7,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Info, Plus, Trash2 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
-import { calculateSolarSystem } from "@/components/utils/solarCalculations";
+
+interface CatalogueAppliance {
+  id: string;
+  name: string;
+  category: string;
+}
 
 const ApplianceSelection = ({ onNext, onBack, data }) => {
   const [appliances, setAppliances] = useState(data?.appliances || []);
-  const [availableAppliances, setAvailableAppliances] = useState([]);
+  const [availableAppliances, setAvailableAppliances] = useState<CatalogueAppliance[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
@@ -23,25 +28,9 @@ const ApplianceSelection = ({ onNext, onBack, data }) => {
 
   const fetchAppliances = async () => {
     try {
-      console.log('Fetching appliances...');
-      const { data: appliancesData, error } = await supabase
-        .from('appliances')
-        .select('*')
-        .order('category', { ascending: true })
-        .order('name', { ascending: true });
-
-      if (error) {
-        console.error('Error fetching appliances:', error);
-        toast({
-          title: "Error",
-          description: "Failed to load appliances. Please try again.",
-          variant: "destructive"
-        });
-        return;
-      }
-
-      console.log('Fetched appliances:', appliancesData);
-      setAvailableAppliances(appliancesData || []);
+      // Wattage and surge data stay on the server (FR-003); we only get names.
+      const appliancesData = await api<CatalogueAppliance[]>('/appliances');
+      setAvailableAppliances(appliancesData);
       
       if (!appliancesData || appliancesData.length === 0) {
         toast({
@@ -65,8 +54,8 @@ const ApplianceSelection = ({ onNext, onBack, data }) => {
   const addAppliance = () => {
     const newAppliance = {
       id: Date.now(),
+      applianceId: null,
       name: '',
-      power_rating: 0,
       quantity: 1,
       dayHours: 0,
       nightHours: 0
@@ -112,13 +101,8 @@ const ApplianceSelection = ({ onNext, onBack, data }) => {
     const selectedAppliance = availableAppliances.find(app => app.name === selectedName);
     
     if (selectedAppliance) {
-      // Store power_rating internally but never display it
       setAppliances(appliances.map(app => 
-        app.id === id ? { 
-          ...app, 
-          name: selectedAppliance.name,
-          power_rating: selectedAppliance.power_rating // Internal use only
-        } : app
+        app.id === id ? { ...app, applianceId: selectedAppliance.id, name: selectedAppliance.name } : app
       ));
     } else {
       toast({
@@ -155,34 +139,19 @@ const ApplianceSelection = ({ onNext, onBack, data }) => {
       return;
     }
 
-    // Prepare appliances for calculation (power_w is internal, never shown to user)
+    // Only catalogue ids, quantities and hours leave the browser; sizing happens server-side.
     const appliancesForNext = appliances.map(app => ({
       id: app.id,
+      applianceId: app.applianceId,
       name: app.name,
-      power_w: app.power_rating || 0, // Internal power value
       quantity: app.quantity,
-      day_hours: app.dayHours,
-      night_hours: app.nightHours
+      dayHours: app.dayHours,
+      nightHours: app.nightHours
     }));
 
-    // Use the comprehensive calculation system
-    const systemCalc = calculateSolarSystem(appliances.map(app => ({
-      ...app,
-      power: app.power_rating || 0
-    })));
-
-    // Extract key values for next steps (all internal, never shown)
-    const daytimeLoad = systemCalc.totalLoadW; // Peak instantaneous load
-    const nightEnergy = systemCalc.nightLoadWh / 1000; // Convert to kWh
-    const dayEnergy = systemCalc.dayLoadWh / 1000; // Convert to kWh
-    
     if (typeof onNext === 'function') {
       onNext({
-        appliances: appliancesForNext,
-        daytimeLoad, // Internal: for inverter sizing
-        nightEnergy, // Internal: for battery sizing
-        dayEnergy,   // Internal: for panel sizing
-        systemCalculation: systemCalc
+        appliances: appliancesForNext
       });
     } else {
       toast({
@@ -369,7 +338,7 @@ const ApplianceSelection = ({ onNext, onBack, data }) => {
               disabled={!isValid}
               className="flex-1 bg-gradient-to-r from-orange-500 to-yellow-500 hover:from-orange-600 hover:to-yellow-600"
             >
-              Next: Choose Inverter
+              Next: See My System
             </Button>
           </div>
         </CardContent>

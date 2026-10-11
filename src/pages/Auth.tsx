@@ -60,12 +60,12 @@ const Auth = () => {
         : await signUp(email, password, formatWhatsAppNumber(whatsappNumber));
 
       if (error) {
-        if (error.message.includes('Invalid login credentials')) {
+        if (error.message.includes('Invalid email or password')) {
           setError('Invalid email or password. Please try again.');
-        } else if (error.message.includes('User already registered')) {
+        } else if (error.message.includes('User already exists')) {
           setError('An account with this email already exists. Please sign in instead.');
-        } else if (error.message.includes('Password should be at least')) {
-          setError('Password must be at least 6 characters long.');
+        } else if (error.message.includes('Password too short')) {
+          setError('Password must be at least 8 characters long.');
         } else {
           setError(error.message);
         }
@@ -79,8 +79,9 @@ const Auth = () => {
         } else {
           toast({
             title: "Account created!",
-            description: "Please check your email to verify your account.",
+            description: "You're signed in and can now save quotes.",
           });
+          navigate('/');
         }
       }
     } catch (err) {
@@ -143,7 +144,7 @@ const Auth = () => {
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={loading}
                 required
-                minLength={6}
+                minLength={8}
               />
             </div>
 

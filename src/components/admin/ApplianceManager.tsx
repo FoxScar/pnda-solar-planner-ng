@@ -1,282 +1,158 @@
-
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { Plus, Edit, Trash2, Save, X, RefreshCw } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/hooks/use-toast";
+import { Plus, Save, X } from "lucide-react";
+import { api } from "@/lib/api";
+import { useAdminAction } from "./useAdminToast";
+
+interface Appliance {
+  id: string;
+  name: string;
+  category: string;
+  watts: number;
+  surgeFactor: number;
+  isAirConditioner: boolean;
+  isActive: boolean;
+}
+
+type Draft = Pick<Appliance, "watts" | "surgeFactor">;
+
+const EMPTY_FORM = { name: "", category: "", watts: "", surgeFactor: "1", isAirConditioner: false };
 
 const ApplianceManager = () => {
-  const [appliances, setAppliances] = useState([]);
+  const [items, setItems] = useState<Appliance[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [editingId, setEditingId] = useState(null);
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [formData, setFormData] = useState({
-    name: '',
-    power_rating: '',
-    category: '',
-    is_energy_efficient: false
-  });
-  const { toast } = useToast();
+  const [search, setSearch] = useState("");
+  const [drafts, setDrafts] = useState<Record<string, Draft>>({});
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState(EMPTY_FORM);
+  const run = useAdminAction();
 
   useEffect(() => {
-    fetchAppliances();
+    api<Appliance[]>("/admin/appliances")
+      .then(setItems)
+      .finally(() => setLoading(false));
   }, []);
 
-  const fetchAppliances = async () => {
-    setLoading(true);
-    try {
-      console.log('[ApplianceManager] Fetching appliances...');
-      const { data, error } = await supabase
-        .from('appliances')
-        .select('*')
-        .order('category', { ascending: true });
-      
-      if (error) throw error;
-      setAppliances(data || []);
-      console.log('[ApplianceManager] Fetched appliances:', data?.length || 0);
-    } catch (error) {
-      console.error('[ApplianceManager] Error fetching appliances:', error);
-      toast({
-        title: "Error",
-        description: "Failed to fetch appliances",
-        variant: "destructive"
-      });
-    } finally {
-      setLoading(false);
+  const patch = async (id: string, body: Partial<Appliance>, message: string) => {
+    const updated = await run(() => api<Appliance>(`/admin/appliances/${id}`, { method: "PATCH", json: body }), message);
+    if (updated) {
+      setItems((prev) => prev.map((a) => (a.id === id ? updated : a)));
+      setDrafts(({ [id]: _, ...rest }) => rest);
     }
   };
 
-  const resetForm = () => {
-    setFormData({
-      name: '',
-      power_rating: '',
-      category: '',
-      is_energy_efficient: false
-    });
-    setEditingId(null);
-    setShowAddForm(false);
-  };
-
-  const handleInputChange = (field, value) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
-  };
-
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      const dataToSave = {
-        name: formData.name,
-        power_rating: parseInt(formData.power_rating),
-        category: formData.category,
-        is_energy_efficient: formData.is_energy_efficient
-      };
-
-      console.log('[ApplianceManager] Saving appliance:', dataToSave);
-
-      if (editingId) {
-        const { error } = await supabase
-          .from('appliances')
-          .update(dataToSave)
-          .eq('id', editingId);
-        
-        if (error) throw error;
-        toast({ title: "Success", description: "Appliance updated successfully" });
-      } else {
-        const { error } = await supabase
-          .from('appliances')
-          .insert([dataToSave]);
-        
-        if (error) throw error;
-        toast({ title: "Success", description: "Appliance added successfully" });
-      }
-
-      await fetchAppliances();
-      resetForm();
-    } catch (error) {
-      console.error('[ApplianceManager] Error saving appliance:', error);
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive"
-      });
-    } finally {
-      setSaving(false);
+  const create = async () => {
+    const created = await run(
+      () =>
+        api<Appliance>("/admin/appliances", {
+          method: "POST",
+          json: {
+            name: form.name,
+            category: form.category,
+            watts: Number(form.watts),
+            surgeFactor: Number(form.surgeFactor),
+            isAirConditioner: form.isAirConditioner,
+          },
+        }),
+      "Appliance added",
+    );
+    if (created) {
+      setItems((prev) => [...prev, created]);
+      setForm(EMPTY_FORM);
+      setShowForm(false);
     }
   };
 
-  const handleEdit = (appliance) => {
-    setFormData({
-      name: appliance.name,
-      power_rating: appliance.power_rating.toString(),
-      category: appliance.category,
-      is_energy_efficient: appliance.is_energy_efficient
-    });
-    setEditingId(appliance.id);
-    setShowAddForm(true);
-  };
-
-  const handleDelete = async (id) => {
-    if (!confirm('Are you sure you want to delete this appliance?')) return;
-    
-    try {
-      const { error } = await supabase
-        .from('appliances')
-        .delete()
-        .eq('id', id);
-      
-      if (error) throw error;
-      toast({ title: "Success", description: "Appliance deleted successfully" });
-      await fetchAppliances();
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive"
-      });
-    }
-  };
-
-  if (loading) {
-    return <div className="text-center">Loading appliances...</div>;
-  }
+  const draftFor = (a: Appliance): Draft => drafts[a.id] ?? { watts: a.watts, surgeFactor: a.surgeFactor };
+  const setDraft = (a: Appliance, field: keyof Draft, value: number) =>
+    setDrafts((d) => ({ ...d, [a.id]: { ...draftFor(a), [field]: value } }));
+  const visible = items.filter((a) => `${a.name} ${a.category}`.toLowerCase().includes(search.toLowerCase()));
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h3 className="text-lg font-semibold">Appliance Management</h3>
-        <div className="flex items-center gap-2">
-          <Button 
-            onClick={fetchAppliances} 
-            variant="outline" 
-            size="sm"
-            disabled={loading}
-          >
-            <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
-          <Button onClick={() => setShowAddForm(true)} disabled={showAddForm}>
-            <Plus className="w-4 h-4 mr-2" />
-            Add Appliance
+    <Card>
+      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
+        <CardTitle>Appliance Catalogue ({items.length})</CardTitle>
+        <div className="flex gap-2">
+          <Input placeholder="Search…" value={search} onChange={(e) => setSearch(e.target.value)} className="w-40" />
+          <Button onClick={() => setShowForm((s) => !s)} className="flex items-center gap-2">
+            {showForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+            {showForm ? "Cancel" : "Add"}
           </Button>
         </div>
-      </div>
-
-      {showAddForm && (
-        <Card>
-          <CardHeader>
-            <CardTitle>{editingId ? 'Edit Appliance' : 'Add New Appliance'}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="name">Name</Label>
-                <Input
-                  id="name"
-                  value={formData.name}
-                  onChange={(e) => handleInputChange('name', e.target.value)}
-                  placeholder="e.g., LED Bulb 10W"
-                />
-              </div>
-              <div>
-                <Label htmlFor="power_rating">Power Rating (W)</Label>
-                <Input
-                  id="power_rating"
-                  type="number"
-                  value={formData.power_rating}
-                  onChange={(e) => handleInputChange('power_rating', e.target.value)}
-                  placeholder="e.g., 10, 50, 100"
-                />
-              </div>
-              <div>
-                <Label htmlFor="category">Category</Label>
-                <Input
-                  id="category"
-                  value={formData.category}
-                  onChange={(e) => handleInputChange('category', e.target.value)}
-                  placeholder="e.g., Lighting, Kitchen, Entertainment"
-                />
-              </div>
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  id="is_energy_efficient"
-                  checked={formData.is_energy_efficient}
-                  onChange={(e) => handleInputChange('is_energy_efficient', e.target.checked)}
-                />
-                <Label htmlFor="is_energy_efficient">Energy Efficient</Label>
-              </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <p className="text-sm text-gray-600">
+          Wattage and surge factors are used by the sizing engine only and are never shown to customers.
+          Surge factor guide: AC 3.0, pumps 2.5, fridges/freezers 2.0, other motors 2.0, everything else 1.0.
+        </p>
+        {showForm && (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 border rounded-lg bg-gray-50">
+            <div><Label>Name</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
+            <div><Label>Category</Label><Input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} /></div>
+            <div><Label>Running watts</Label><Input type="number" min="1" value={form.watts} onChange={(e) => setForm({ ...form, watts: e.target.value })} /></div>
+            <div><Label>Surge factor</Label><Input type="number" step="0.1" min="1" value={form.surgeFactor} onChange={(e) => setForm({ ...form, surgeFactor: e.target.value })} /></div>
+            <div className="flex items-center gap-2 pt-6">
+              <Switch id="new-ac" checked={form.isAirConditioner} onCheckedChange={(v) => setForm({ ...form, isAirConditioner: v })} />
+              <Label htmlFor="new-ac">Air conditioner</Label>
             </div>
-            <div className="flex gap-2">
-              <Button onClick={handleSave} disabled={saving}>
-                <Save className={`w-4 h-4 mr-2 ${saving ? 'animate-spin' : ''}`} />
-                {saving ? 'Saving...' : (editingId ? 'Update' : 'Save')}
-              </Button>
-              <Button variant="outline" onClick={resetForm} disabled={saving}>
-                <X className="w-4 h-4 mr-2" />
-                Cancel
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Power Rating</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead>Energy Efficient</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {appliances.map((appliance) => (
-                <TableRow key={appliance.id}>
-                  <TableCell className="font-medium">{appliance.name}</TableCell>
-                  <TableCell>{appliance.power_rating}W</TableCell>
-                  <TableCell>{appliance.category}</TableCell>
-                  <TableCell>
-                    <Badge variant={appliance.is_energy_efficient ? "default" : "secondary"}>
-                      {appliance.is_energy_efficient ? "Yes" : "No"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleEdit(appliance)}
-                      >
-                        <Edit className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleDelete(appliance.id)}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
+            <div className="flex items-end"><Button onClick={create} className="flex items-center gap-2"><Save className="w-4 h-4" />Save</Button></div>
+          </div>
+        )}
+        {loading ? (
+          <p className="text-gray-600">Loading…</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Category</TableHead>
+                  <TableHead>Watts</TableHead>
+                  <TableHead>Surge ×</TableHead>
+                  <TableHead>AC</TableHead>
+                  <TableHead>Active</TableHead>
+                  <TableHead />
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-    </div>
+              </TableHeader>
+              <TableBody>
+                {visible.map((a) => {
+                  const d = draftFor(a);
+                  const dirty = d.watts !== a.watts || d.surgeFactor !== a.surgeFactor;
+                  return (
+                    <TableRow key={a.id}>
+                      <TableCell>{a.name}</TableCell>
+                      <TableCell>{a.category}</TableCell>
+                      <TableCell>
+                        <Input type="number" min="1" className="w-24" aria-label={`${a.name} watts`} value={d.watts} onChange={(e) => setDraft(a, "watts", Number(e.target.value))} />
+                      </TableCell>
+                      <TableCell>
+                        <Input type="number" step="0.1" min="1" className="w-20" aria-label={`${a.name} surge factor`} value={d.surgeFactor} onChange={(e) => setDraft(a, "surgeFactor", Number(e.target.value))} />
+                      </TableCell>
+                      <TableCell>
+                        <Switch checked={a.isAirConditioner} aria-label={`${a.name} is an air conditioner`} onCheckedChange={(v) => patch(a.id, { isAirConditioner: v }, `${a.name} updated`)} />
+                      </TableCell>
+                      <TableCell>
+                        <Switch checked={a.isActive} aria-label={`${a.name} active`} onCheckedChange={(v) => patch(a.id, { isActive: v }, `${a.name} ${v ? "shown" : "hidden"}`)} />
+                      </TableCell>
+                      <TableCell>
+                        {dirty && (
+                          <Button size="sm" onClick={() => patch(a.id, d, `${a.name} updated`)} aria-label="Save"><Save className="w-4 h-4" /></Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 };
 

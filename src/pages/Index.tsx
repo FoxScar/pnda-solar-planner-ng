@@ -5,37 +5,25 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Sun, Zap, Battery, PanelsTopLeft, AlertTriangle, User, FileText, LogOut } from "lucide-react";
+import { Sun, Zap, AlertTriangle, User, FileText, LogOut } from "lucide-react";
 import ApplianceSelection from '@/components/ApplianceSelection';
-import InverterSizing from '@/components/InverterSizing';
-import BatterySizing from '@/components/BatterySizing';
-import PanelSizing from '@/components/PanelSizing';
-import ReviewQuote from '@/components/ReviewQuote';
+import SystemResultPending from '@/components/SystemResultPending';
 import SavedQuotes from '@/components/SavedQuotes';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from "@/hooks/use-toast";
 import pndaSolarLogo from '@/assets/pnda-solar-simple-logo.png';
 
+const WIZARD_STEP_COUNT = 2;
+
 const Index = () => {
   const [currentStep, setCurrentStep] = useState(() => {
-    const saved = localStorage.getItem('solar-wizard-step');
-    return saved ? parseInt(saved, 10) : 0;
+    // Clamp: older versions of the wizard had more steps.
+    const saved = parseInt(localStorage.getItem('solar-wizard-step') ?? '0', 10);
+    return Number.isFinite(saved) ? Math.min(Math.max(saved, 0), WIZARD_STEP_COUNT) : 0;
   });
   const [applianceData, setApplianceData] = useState(() => {
     const saved = localStorage.getItem('solar-wizard-appliances');
     return saved ? JSON.parse(saved) : [];
-  });
-  const [inverterData, setInverterData] = useState(() => {
-    const saved = localStorage.getItem('solar-wizard-inverter');
-    return saved ? JSON.parse(saved) : null;
-  });
-  const [batteryData, setBatteryData] = useState(() => {
-    const saved = localStorage.getItem('solar-wizard-battery');
-    return saved ? JSON.parse(saved) : null;
-  });
-  const [panelData, setPanelData] = useState(() => {
-    const saved = localStorage.getItem('solar-wizard-panels');
-    return saved ? JSON.parse(saved) : null;
   });
   const [globalError, setGlobalError] = useState(null);
   const [showSavedQuotes, setShowSavedQuotes] = useState(false);
@@ -52,24 +40,9 @@ const Index = () => {
     localStorage.setItem('solar-wizard-appliances', JSON.stringify(applianceData));
   }, [applianceData]);
 
-  useEffect(() => {
-    localStorage.setItem('solar-wizard-inverter', JSON.stringify(inverterData));
-  }, [inverterData]);
-
-  useEffect(() => {
-    localStorage.setItem('solar-wizard-battery', JSON.stringify(batteryData));
-  }, [batteryData]);
-
-  useEffect(() => {
-    localStorage.setItem('solar-wizard-panels', JSON.stringify(panelData));
-  }, [panelData]);
-
   const steps = [
     { name: 'Appliances', icon: Zap, component: ApplianceSelection },
-    { name: 'Inverter', icon: Sun, component: InverterSizing },
-    { name: 'Battery', icon: Battery, component: BatterySizing },
-    { name: 'Panels', icon: PanelsTopLeft, component: PanelSizing },
-    { name: 'Review', icon: Sun, component: ReviewQuote }
+    { name: 'Your System', icon: Sun, component: SystemResultPending }
   ];
 
   // Calculate progress correctly - exclude welcome screen from calculation
@@ -80,9 +53,6 @@ const Index = () => {
   const clearLocalStorage = () => {
     localStorage.removeItem('solar-wizard-step');
     localStorage.removeItem('solar-wizard-appliances');
-    localStorage.removeItem('solar-wizard-inverter');
-    localStorage.removeItem('solar-wizard-battery');
-    localStorage.removeItem('solar-wizard-panels');
   };
 
   const handleSignOut = async () => {
@@ -90,9 +60,6 @@ const Index = () => {
       await signOut();
       setCurrentStep(0);
       setApplianceData([]);
-      setInverterData(null);
-      setBatteryData(null);
-      setPanelData(null);
       setShowSavedQuotes(false);
       clearLocalStorage();
       toast({
@@ -109,20 +76,6 @@ const Index = () => {
     }
   };
 
-  const handleLoadQuote = (quoteData: any) => {
-    // Load the quote data into the current state
-    setApplianceData(quoteData.appliances_data || []);
-    setInverterData(quoteData.inverter_data || null);
-    setBatteryData(quoteData.battery_data || null);
-    setPanelData(quoteData.panel_data || null);
-    setShowSavedQuotes(false);
-    setCurrentStep(5); // Go to review step
-    toast({
-      title: "Quote Loaded",
-      description: "Your saved quote has been loaded successfully.",
-    });
-  };
-
   const handleNext = (data) => {
     try {
       setGlobalError(null);
@@ -137,27 +90,6 @@ const Index = () => {
             return;
           }
           setApplianceData(data.appliances);
-          break;
-        case 2: // From InverterSizing
-          if (!data || !data.inverter_id) {
-            setGlobalError('Please select an inverter before proceeding.');
-            return;
-          }
-          setInverterData(data);
-          break;
-        case 3: // From BatterySizing
-          if (!data || !data.battery_id) {
-            setGlobalError('Please select a battery system before proceeding.');
-            return;
-          }
-          setBatteryData(data);
-          break;
-        case 4: // From PanelSizing
-          if (!data || !data.panels || !data.state) {
-            setGlobalError('Please select solar panels and specify your location before proceeding.');
-            return;
-          }
-          setPanelData(data);
           break;
       }
       
@@ -234,7 +166,6 @@ const Index = () => {
 
           <SavedQuotes 
             onBack={() => setShowSavedQuotes(false)} 
-            onLoadQuote={handleLoadQuote}
           />
         </div>
       </div>
@@ -323,16 +254,13 @@ const Index = () => {
                 onClick={handleStart}
                 className="w-full bg-gradient-to-r from-orange-500 to-yellow-500 hover:from-orange-600 hover:to-yellow-600 text-white font-semibold py-3 text-lg"
               >
-                {applianceData.length > 0 || inverterData || batteryData || panelData ? 'Continue Where I Left Off' : 'Start Sizing My Solar System'}
+                {applianceData.length > 0 ? 'Continue Where I Left Off' : 'Start Sizing My Solar System'}
               </Button>
-              {(applianceData.length > 0 || inverterData || batteryData || panelData) && (
+              {(applianceData.length > 0) && (
                 <Button 
                   onClick={() => {
                     setCurrentStep(0);
                     setApplianceData([]);
-                    setInverterData(null);
-                    setBatteryData(null);
-                    setPanelData(null);
                     clearLocalStorage();
                     toast({
                       title: "Progress Cleared",
@@ -412,10 +340,7 @@ const Index = () => {
           onNext={handleNext}
           onBack={handleBack}
           data={{
-            appliances: applianceData,
-            inverter: inverterData,
-            battery: batteryData,
-            panels: panelData
+            appliances: applianceData
           }}
         />
       </div>
