@@ -5,15 +5,16 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Sun, Zap, AlertTriangle, User, FileText, LogOut } from "lucide-react";
+import { Sun, Zap, MapPin, AlertTriangle, User, FileText, LogOut } from "lucide-react";
 import ApplianceSelection from '@/components/ApplianceSelection';
-import SystemResultPending from '@/components/SystemResultPending';
+import LocationStep from '@/components/LocationStep';
+import SystemResult from '@/components/SystemResult';
 import SavedQuotes from '@/components/SavedQuotes';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from "@/hooks/use-toast";
 import pndaSolarLogo from '@/assets/pnda-solar-simple-logo.png';
 
-const WIZARD_STEP_COUNT = 2;
+const WIZARD_STEP_COUNT = 3;
 
 const Index = () => {
   const [currentStep, setCurrentStep] = useState(() => {
@@ -24,6 +25,10 @@ const Index = () => {
   const [applianceData, setApplianceData] = useState(() => {
     const saved = localStorage.getItem('solar-wizard-appliances');
     return saved ? JSON.parse(saved) : [];
+  });
+  const [locationData, setLocationData] = useState(() => {
+    const saved = localStorage.getItem('solar-wizard-location');
+    return saved ? JSON.parse(saved) : null;
   });
   const [globalError, setGlobalError] = useState(null);
   const [showSavedQuotes, setShowSavedQuotes] = useState(false);
@@ -40,9 +45,14 @@ const Index = () => {
     localStorage.setItem('solar-wizard-appliances', JSON.stringify(applianceData));
   }, [applianceData]);
 
+  useEffect(() => {
+    localStorage.setItem('solar-wizard-location', JSON.stringify(locationData));
+  }, [locationData]);
+
   const steps = [
     { name: 'Appliances', icon: Zap, component: ApplianceSelection },
-    { name: 'Your System', icon: Sun, component: SystemResultPending }
+    { name: 'Location', icon: MapPin, component: LocationStep },
+    { name: 'Your System', icon: Sun, component: SystemResult }
   ];
 
   // Calculate progress correctly - exclude welcome screen from calculation
@@ -53,6 +63,7 @@ const Index = () => {
   const clearLocalStorage = () => {
     localStorage.removeItem('solar-wizard-step');
     localStorage.removeItem('solar-wizard-appliances');
+    localStorage.removeItem('solar-wizard-location');
   };
 
   const handleSignOut = async () => {
@@ -60,6 +71,7 @@ const Index = () => {
       await signOut();
       setCurrentStep(0);
       setApplianceData([]);
+      setLocationData(null);
       setShowSavedQuotes(false);
       clearLocalStorage();
       toast({
@@ -90,6 +102,13 @@ const Index = () => {
             return;
           }
           setApplianceData(data.appliances);
+          break;
+        case 2: // From LocationStep
+          if (!data?.location?.state) {
+            setGlobalError('Please select your state before proceeding.');
+            return;
+          }
+          setLocationData(data.location);
           break;
       }
       
@@ -261,6 +280,7 @@ const Index = () => {
                   onClick={() => {
                     setCurrentStep(0);
                     setApplianceData([]);
+                    setLocationData(null);
                     clearLocalStorage();
                     toast({
                       title: "Progress Cleared",
@@ -340,7 +360,8 @@ const Index = () => {
           onNext={handleNext}
           onBack={handleBack}
           data={{
-            appliances: applianceData
+            appliances: applianceData,
+            location: locationData
           }}
         />
       </div>

@@ -164,6 +164,8 @@ export const components = pgTable(
     chemistry: batteryChemistryEnum("chemistry"),
     capacityKwh: doublePrecision("capacity_kwh"),
     capacityAh: doublePrecision("capacity_ah"),
+    /** Inverters only: max PV array the built-in charge controller accepts (null = unknown). */
+    maxPvInputW: integer("max_pv_input_w"),
     /** Panels only. */
     wattsPeak: integer("watts_peak"),
     unitPriceNgn: bigint("unit_price_ngn", { mode: "number" }).notNull(),
@@ -225,6 +227,10 @@ export const quotes = pgTable(
     pricing: jsonb("pricing").notNull(),
     totalCostNgn: bigint("total_cost_ngn", { mode: "number" }).notNull(),
     engineVersion: text("engine_version").notNull(),
+    /** The immutable calculation this quote was generated from. */
+    calcAuditId: uuid("calc_audit_id")
+      .notNull()
+      .references(() => quoteCalcAudit.id, { onDelete: "restrict" }),
     createdAt: createdAt(),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   },
@@ -234,19 +240,22 @@ export const quotes = pgTable(
   ],
 );
 
-/** Immutable calculation trace (write-once, enforced by trigger in a custom migration). */
+/**
+ * Immutable trace of every calculation (write-once, enforced by trigger).
+ * Quotes reference it via quotes.calc_audit_id, so it never needs updating.
+ */
 export const quoteCalcAudit = pgTable(
   "quote_calc_audit",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    quoteId: uuid("quote_id").references(() => quotes.id, { onDelete: "restrict" }),
     userId: text("user_id"),
     inputs: jsonb("inputs").notNull(),
+    /** Full engine result, or the error code/message for rejected calculations. */
     stepResults: jsonb("step_results").notNull(),
     engineVersion: text("engine_version").notNull(),
     createdAt: createdAt(),
   },
-  (t) => [index("quote_calc_audit_quote_idx").on(t.quoteId)],
+  (t) => [index("quote_calc_audit_user_idx").on(t.userId, t.createdAt)],
 );
 
 export const installerInventory = pgTable(
@@ -328,3 +337,10 @@ export const adEvents = pgTable(
   },
   (t) => [index("ad_events_quote_idx").on(t.quoteId, t.startedAt)],
 );
+
+/** Fixed-window request counters, shared across API instances (PRD §20.3). */
+export const rateLimits = pgTable("rate_limits", {
+  key: text("key").primaryKey(),
+  windowStart: timestamp("window_start", { withTimezone: true }).notNull(),
+  count: integer("count").notNull(),
+});

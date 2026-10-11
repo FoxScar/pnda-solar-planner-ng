@@ -102,7 +102,7 @@ const ApplianceSelection = ({ onNext, onBack, data }) => {
     
     if (selectedAppliance) {
       setAppliances(appliances.map(app => 
-        app.id === id ? { ...app, applianceId: selectedAppliance.id, name: selectedAppliance.name } : app
+        app.id === id ? { ...app, applianceId: selectedAppliance.id, name: selectedAppliance.name, category: selectedAppliance.category } : app
       ));
     } else {
       toast({
@@ -127,7 +127,7 @@ const ApplianceSelection = ({ onNext, onBack, data }) => {
     }
 
     const invalidAppliances = appliances.filter(app => 
-      !app.name || app.quantity <= 0 || (app.dayHours === 0 && app.nightHours === 0)
+      !app.applianceId || app.quantity <= 0 || (app.dayHours === 0 && app.nightHours === 0)
     );
     if (invalidAppliances.length > 0) {
       console.log('Invalid appliances found:', invalidAppliances);
@@ -144,6 +144,7 @@ const ApplianceSelection = ({ onNext, onBack, data }) => {
       id: app.id,
       applianceId: app.applianceId,
       name: app.name,
+      category: app.category,
       quantity: app.quantity,
       dayHours: app.dayHours,
       nightHours: app.nightHours
@@ -163,7 +164,7 @@ const ApplianceSelection = ({ onNext, onBack, data }) => {
   };
 
   const isValid = appliances.length > 0 && appliances.every(app => 
-    app.name && app.quantity > 0 && (app.dayHours > 0 || app.nightHours > 0)
+    app.applianceId && app.quantity > 0 && (app.dayHours > 0 || app.nightHours > 0)
   );
 
   if (loading) {
@@ -338,7 +339,7 @@ const ApplianceSelection = ({ onNext, onBack, data }) => {
               disabled={!isValid}
               className="flex-1 bg-gradient-to-r from-orange-500 to-yellow-500 hover:from-orange-600 hover:to-yellow-600"
             >
-              Next: See My System
+              Next: Your Location
             </Button>
           </div>
         </CardContent>

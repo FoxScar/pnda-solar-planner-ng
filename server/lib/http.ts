@@ -1,9 +1,9 @@
+import { ENGINE_VERSION } from "../engine/constants";
 import type { Context } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import type { ApiFailure, ApiSuccess, ErrorCode } from "../../shared/domain";
 
-/** Bumped whenever sizing logic changes; recorded on every quote and audit row. */
-export const ENGINE_VERSION = "0.1.0";
+
 
 export class ApiError extends Error {
   constructor(

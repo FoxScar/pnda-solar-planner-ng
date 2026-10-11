@@ -27,11 +27,29 @@ No Supabase or Appwrite dependency remains.
 3. **AC loads require lithium** whenever any air conditioner is selected, regardless of inverter size
    (FR-019 wins over the >4kVA wording in §13.2/§15.1). Engineers may override with justification.
 
+4. **Inverter sizing uses the larger of the day and night surge-adjusted peaks** (supersedes FR-012's
+   "daytime peak only"). The inverter powers night loads too; with ACs used only at night the
+   day-only rule selects an inverter that cannot start them.
+5. **Reference designs** are redefined with pinned inputs in [`reference-designs.md`](reference-designs.md)
+   (supersedes §37.4, whose inputs were incomplete and whose outputs did not follow from §14).
+
+## Phase 1 implementation choices
+
+- **Guests can calculate** (soft auth, §25.2) with per-IP rate limiting; saving/sharing a quote
+  will require an account. This relaxes §20.3 — revisit if abuse appears.
+- **Battery selection** follows §15.3 literally: fewest units, then least installed capacity, then
+  price. This can pick a pricier bank (e.g. 2 × 25kWh over 3 × 15kWh); switch to cheapest-first if
+  preferred.
+- **Inverter PV input limits**: components have an optional `max_pv_input_w`. When set, the engine
+  steps up to an inverter whose charge controller accepts the array; when unknown, results carry a
+  `PV_INPUT_UNVERIFIED` warning (shown to engineers). Felicity datasheet values should be entered.
+- **Custom appliances** (FR-005) are treated as non-surge loads; entries above 5kW are flagged.
+
 ## Still open
 
-- **Reference designs (§37.4)** need exact inputs — appliance models, wattages, day/night hours —
-  before they can serve as regression tests. As written, REF-001 and REF-002 do not follow from the
-  PRD's own formulas (REF-001 computes to the 1.8kVA inverter, REF-002 to 8kVA).
+- **Fridge/freezer duty cycle**: compressors are sized as running for every hour entered. A user
+  entering "24 hours" for a fridge gets ~2–3× its real daily energy. Options: catalogue duty-cycle
+  factor, or ask users for typical hours. Needs an engineering decision.
 - **Inverter and panel prices** are not in the PRD. Seed data uses placeholders; set real prices in
   the admin panel.
 - **Guest sizing vs. §20.3** ("no unauthenticated calculation calls"): decide whether guests can see a

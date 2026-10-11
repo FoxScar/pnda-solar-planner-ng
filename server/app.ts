@@ -6,7 +6,9 @@ import type { Db } from "./db/client";
 import type { AppEnv } from "./lib/context";
 import { ApiError, fail, ok } from "./lib/http";
 import { loadSession } from "./lib/middleware";
+import { EngineError } from "./engine";
 import { adminRoutes } from "./routes/admin";
+import { calculateRoutes } from "./routes/calculate";
 import { catalogRoutes } from "./routes/catalog";
 import { meRoutes } from "./routes/me";
 import { quoteRoutes } from "./routes/quotes";
@@ -45,6 +47,7 @@ export function createApp({ db, auth }: { db: Db; auth: Auth }) {
       return ok(c, { status: "ok" });
     })
     .route("/", catalogRoutes)
+    .route("/", calculateRoutes)
     .route("/me", meRoutes)
     .route("/quotes", quoteRoutes)
     .route("/admin", adminRoutes);
@@ -55,6 +58,10 @@ export function createApp({ db, auth }: { db: Db; auth: Auth }) {
 
   app.onError((err, c) => {
     if (err instanceof ApiError) return fail(c, err);
+    if (err instanceof EngineError) {
+      const status = err.code === "INVALID_PAYLOAD" ? 400 : 422;
+      return fail(c, new ApiError(status, err.code, err.message, err.field, err.details));
+    }
     const pg = fromPostgresError(err);
     if (pg) return fail(c, pg);
     console.error(`[${c.var.requestId}]`, err);

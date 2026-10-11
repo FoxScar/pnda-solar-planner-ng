@@ -1,6 +1,6 @@
 import { eq, sql as dsql } from "drizzle-orm";
 import { afterAll, describe, expect, it } from "vitest";
-import { auditLog, components, quotes, userProfiles } from "../db/schema";
+import { auditLog, components, quoteCalcAudit, quotes, userProfiles } from "../db/schema";
 import { createHarness } from "./harness";
 
 const h = createHarness();
@@ -193,7 +193,9 @@ describe("quote visibility", () => {
     const alice = await h.signUp();
     const bob = await h.signUp();
     const admin = await h.signUp("admin");
+    const [calc] = await h.db.insert(quoteCalcAudit).values({ inputs: {}, stepResults: {}, engineVersion: "test" }).returning();
     const base = {
+      calcAuditId: calc!.id,
       state: "Lagos",
       inputs: {},
       result: {},

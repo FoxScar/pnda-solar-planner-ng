@@ -15,6 +15,13 @@
       "when": 1791756322469,
       "tag": "0001_audit_write_once",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791757312038,
+      "tag": "0002_engine_support",
+      "breakpoints": true
     }
   ]
 }

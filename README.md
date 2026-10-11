@@ -52,6 +52,12 @@ Further roles are assigned from the admin panel at `/admin`.
 
 ## API
 
+Key endpoints: `POST /api/v1/calculate` (sizing engine; guests allowed, 10/min), `POST /api/v1/validate-config`,
+`GET /api/v1/appliances`, `GET /api/v1/sun-hours`, `/api/v1/quotes`, `/api/v1/admin/*`.
+
+The sizing engine is a pure module in `server/engine/` with 100% test coverage enforced
+(`npm run test:coverage`); reference designs are documented in `docs/reference-designs.md`.
+
 All endpoints live under `/api/v1` and return `{ success, data, meta }` or `{ success: false, error: { code, message, field? } }`.
 Auth endpoints are served by Better Auth under `/api/auth`.
 
