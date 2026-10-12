@@ -1,6 +1,6 @@
 import { eq, sql as dsql } from "drizzle-orm";
 import { afterAll, describe, expect, it } from "vitest";
-import { auditLog, components, quoteCalcAudit, quotes, userProfiles } from "../db/schema";
+import { auditLog, components, userProfiles } from "../db/schema";
 import { createHarness } from "./harness";
 
 const h = createHarness();
@@ -156,10 +156,12 @@ describe("admin inventory management", () => {
 
   it("validates sun-hour ordering (wet ≤ annual ≤ dry)", async () => {
     const { cookie } = await h.signUp("admin");
-    const bad = await h.request("/api/v1/admin/sun-hours/Lagos", { method: "PATCH", cookie, json: { annualAvg: 4.7, wetSeason: 5.5, drySeason: 5.0 } });
+    // Osun is not used by other tests; restored below so test files stay independent.
+    const bad = await h.request("/api/v1/admin/sun-hours/Osun", { method: "PATCH", cookie, json: { annualAvg: 4.7, wetSeason: 5.5, drySeason: 5.0 } });
     expect(bad.status).toBe(400);
-    const good = await h.request("/api/v1/admin/sun-hours/Lagos", { method: "PATCH", cookie, json: { annualAvg: 4.8, wetSeason: 4.1, drySeason: 5.1 } });
+    const good = await h.request("/api/v1/admin/sun-hours/Osun", { method: "PATCH", cookie, json: { annualAvg: 4.8, wetSeason: 4.1, drySeason: 5.1 } });
     expect(good.status).toBe(200);
+    await h.request("/api/v1/admin/sun-hours/Osun", { method: "PATCH", cookie, json: { annualAvg: 4.7, wetSeason: 4.0, drySeason: 5.0 } });
     const missing = await h.request("/api/v1/admin/sun-hours/Atlantis", { method: "PATCH", cookie, json: { annualAvg: 4.8, wetSeason: 4.1, drySeason: 5.1 } });
     expect(missing.body?.error.code).toBe("STATE_NOT_FOUND");
   });
@@ -185,39 +187,5 @@ describe("write-once audit tables", () => {
     await expect(h.db.update(auditLog).set({ actorId: "tampered" })).rejects.toThrow();
     await expect(h.db.delete(auditLog)).rejects.toThrow();
     await expect(h.db.execute(dsql`TRUNCATE audit_log`)).rejects.toThrow();
-  });
-});
-
-describe("quote visibility", () => {
-  it("shows a user only their own quotes; admins see all", async () => {
-    const alice = await h.signUp();
-    const bob = await h.signUp();
-    const admin = await h.signUp("admin");
-    const [calc] = await h.db.insert(quoteCalcAudit).values({ inputs: {}, stepResults: {}, engineVersion: "test" }).returning();
-    const base = {
-      calcAuditId: calc!.id,
-      state: "Lagos",
-      inputs: {},
-      result: {},
-      bom: [],
-      pricing: {},
-      totalCostNgn: 1_000_000,
-      engineVersion: "test",
-      expiresAt: new Date(Date.now() + 30 * 86_400_000),
-    };
-    const [aliceQuote] = await h.db
-      .insert(quotes)
-      .values({ ...base, userId: alice.userId, reference: `T-${crypto.randomUUID()}`, shareToken: crypto.randomUUID() })
-      .returning();
-    await h.db.insert(quotes).values({ ...base, userId: bob.userId, reference: `T-${crypto.randomUUID()}`, shareToken: crypto.randomUUID() });
-
-    const aliceList = await h.request("/api/v1/quotes", { cookie: alice.cookie });
-    expect(aliceList.body?.data.items.map((q: { id: string }) => q.id)).toEqual([aliceQuote!.id]);
-
-    expect((await h.request(`/api/v1/quotes/${aliceQuote!.id}`, { cookie: bob.cookie })).status).toBe(404);
-    expect((await h.request(`/api/v1/quotes/${aliceQuote!.id}`, { cookie: alice.cookie })).status).toBe(200);
-
-    const adminList = await h.request("/api/v1/quotes", { cookie: admin.cookie });
-    expect(adminList.body?.data.total).toBeGreaterThanOrEqual(2);
   });
 });

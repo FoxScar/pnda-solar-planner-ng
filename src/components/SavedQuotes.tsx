@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -36,6 +37,7 @@ const SavedQuotes = ({ onBack }: { onBack: () => void }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (!user) return;
@@ -83,7 +85,14 @@ const SavedQuotes = ({ onBack }: { onBack: () => void }) => {
         ) : (
           <div className="grid gap-4">
             {quotes.map((quote) => (
-              <Card key={quote.id} className="border-l-4 border-l-orange-500">
+              <Card
+                key={quote.id}
+                role="link"
+                tabIndex={0}
+                onClick={() => navigate(`/quote/${quote.id}`)}
+                onKeyDown={(e) => e.key === 'Enter' && navigate(`/quote/${quote.id}`)}
+                className="border-l-4 border-l-orange-500 cursor-pointer hover:shadow-md focus-visible:ring-2 focus-visible:ring-orange-500"
+              >
                 <CardContent className="p-4 sm:p-6 space-y-2">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="font-semibold">{quote.reference}</span>

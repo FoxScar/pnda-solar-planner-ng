@@ -254,16 +254,24 @@ describe("result assembly and pricing", () => {
     expect(r.engineVersion).toMatch(/^\d+\.\d+\.\d+$/);
   });
 
-  it("prices equipment, margin, labour and 7.5% VAT in whole naira", () => {
+  it("prices equipment, labour and 7.5% VAT in whole naira", () => {
     const bom = [
       { componentId: "a", sku: "a", type: "inverter" as const, model: "a", quantity: 1, unitPriceNgn: 1_000_000 },
       { componentId: "b", sku: "b", type: "battery" as const, model: "b", quantity: 2, unitPriceNgn: 333_333 },
     ];
-    expect(priceBom(bom)).toEqual({ equipmentSubtotalNgn: 1_666_666, marginNgn: 0, labourNgn: 0, vatNgn: 125_000, totalNgn: 1_791_666, vatRate: 0.075 });
-    const withMargin = priceBom(bom, { marginPct: 10, labourFlatFeeNgn: 150_000 });
-    expect(withMargin.marginNgn).toBe(166_667);
-    expect(withMargin.vatNgn).toBe(Math.round((1_666_666 + 166_667 + 150_000) * 0.075));
-    expect(withMargin.totalNgn).toBe(1_666_666 + 166_667 + 150_000 + withMargin.vatNgn);
+    const p = priceBom(bom);
+    expect(p).toMatchObject({ equipmentSubtotalNgn: 1_666_666, marginNgn: 0, labourNgn: 0, vatNgn: 125_000, totalNgn: 1_791_666, vatRate: 0.075 });
+    expect(p.lines.map((l) => l.lineTotalNgn)).toEqual([1_000_000, 666_666]);
+  });
+
+  it("folds installer margin into unit prices and keeps totals consistent", () => {
+    const bom = [{ componentId: "b", sku: "b", type: "battery" as const, model: "b", quantity: 3, unitPriceNgn: 333_333 }];
+    const p = priceBom(bom, { marginPct: 10, labourFlatFeeNgn: 150_000 });
+    expect(p.lines[0]!.unitPriceNgn).toBe(366_666); // 333,333 × 1.1 = 366,666.3 → rounded per unit
+    expect(p.equipmentSubtotalNgn).toBe(1_099_998);
+    expect(p.marginNgn).toBe(1_099_998 - 999_999);
+    expect(p.vatNgn).toBe(Math.round((1_099_998 + 150_000) * 0.075));
+    expect(p.totalNgn).toBe(1_099_998 + 150_000 + p.vatNgn);
   });
 
   it("ceilSafe ignores floating-point noise; round rounds", () => {

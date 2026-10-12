@@ -54,6 +54,9 @@ export const ERROR_CODES = [
   "STATE_NOT_FOUND",
   "INVALID_PAYLOAD",
   "RATE_LIMITED",
+  "AD_REQUIRED",
+  "AD_INCOMPLETE",
+  "QUOTE_EXPIRED",
   "UNAUTHENTICATED",
   "FORBIDDEN",
   "NOT_FOUND",
@@ -82,6 +85,12 @@ export const NIGERIAN_STATES = [
   "Plateau", "Rivers", "Sokoto", "Taraba", "Yobe", "Zamfara",
 ] as const;
 export type NigerianState = (typeof NIGERIAN_STATES)[number];
+
+export const QUOTE_VALIDITY_DAYS = 30;
+/** A completed ad unlocks a quote's PDF and share link for this long (PRD §31.1). */
+export const AD_UNLOCK_HOURS = 24;
+/** Used when no ad campaign is configured. Within the PRD's 15–30s range. */
+export const HOUSE_AD_SECONDS = 15;
 
 /** National fallback when a state has no sun-hour record (PRD §19.2). */
 export const NATIONAL_DEFAULT_SUN_HOURS = 4.5;

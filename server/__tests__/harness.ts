@@ -13,7 +13,7 @@ export function createHarness() {
   if (!url) throw new Error("TEST_DATABASE_URL is not set");
   const { db, sql } = createDb(url);
   const auth = createAuth({ db, secret: "test-secret-that-is-at-least-32-characters-long", baseURL: ORIGIN });
-  const app = createApp({ db, auth });
+  const app = createApp({ db, auth, publicUrl: "https://pandasolution.test" });
 
   async function request(path: string, init: RequestInit & { cookie?: string; json?: unknown } = {}) {
     const headers = new Headers(init.headers);

@@ -10,7 +10,7 @@ import type { BomLine, EngineInput, EngineResult, EngineWarning } from "./types"
 export { ENGINE_VERSION } from "./constants";
 export { EngineError } from "./errors";
 export { assertCompatible } from "./guard";
-export { priceBom } from "./pricing";
+export { priceBom, type Pricing, type PricedLine } from "./pricing";
 export type * from "./types";
 
 /**

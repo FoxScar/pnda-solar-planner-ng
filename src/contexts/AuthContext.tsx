@@ -40,6 +40,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // /me returns the role from our own profile table, which the auth session does not carry.
   const refresh = useCallback(async () => {
     try {
+      // Cheap session check first so signed-out visitors don't trigger a 401 on /me.
+      const { data: session } = await authClient.getSession({ query: {} });
+      if (!session) {
+        setUser(null);
+        return;
+      }
       const me = await api<AppUser>('/me');
       setUser({ id: me.id, email: me.email, name: me.name, role: me.role });
     } catch {

@@ -6,6 +6,8 @@ export default defineConfig({
     alias: { "@": path.resolve(__dirname, "./src") },
   },
   test: {
+    // Integration tests share one Postgres database; run files one at a time.
+    fileParallelism: false,
     coverage: {
       provider: "v8",
       include: ["server/engine/**/*.ts"],
@@ -21,8 +23,6 @@ export default defineConfig({
           environment: "node",
           include: ["server/**/*.test.ts", "shared/**/*.test.ts"],
           globalSetup: ["server/__tests__/global-setup.ts"],
-          // Integration tests share one database; run files sequentially.
-          fileParallelism: false,
         },
       },
     ],

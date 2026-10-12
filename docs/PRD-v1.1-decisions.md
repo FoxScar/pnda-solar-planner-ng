@@ -45,7 +45,26 @@ No Supabase or Appwrite dependency remains.
   `PV_INPUT_UNVERIFIED` warning (shown to engineers). Felicity datasheet values should be entered.
 - **Custom appliances** (FR-005) are treated as non-surge loads; entries above 5kW are flagged.
 
+## Phase 4 implementation choices (quotes, PDF, sharing, ad gate)
+
+- **PDFs are generated on demand** from the stored quote snapshot (prices and design frozen at save
+  time), with pdf-lib and an embedded DejaVu Sans font (for the ₦ sign). Nothing is written to file
+  storage, so no storage bucket is needed (supersedes the Appwrite/R2 storage plan in §22, §29).
+- **Saving a quote requires an account.** A guest's calculation can be claimed for 24 hours after
+  signing in. The quote is re-priced at current prices when saved.
+- **Installer margin is folded into unit prices**; clients see Equipment / Labour / VAT / Total only.
+- **Share links** (`/q/<token>`) are public for the 30-day validity period. Because the link itself
+  gives an ungated PDF, it is only revealed to free users after the ad gate.
+- **Ad gate**: server-verified duration using database time; unlock lasts 24 hours per user per
+  quote. Until subscriptions exist, **installer and higher roles count as Pro** and skip the gate.
+  With no ad campaign configured, a 15-second house ad (PandaSolution Pro promo) is shown.
+- **Price validity** is checked whenever a quote is viewed: ≥5% move on any line → `PRICE_CHANGED`;
+  deactivated part → `COMPONENT_UNAVAILABLE`; after 30 days → `expired` (PDF and link return 410).
+
 ## Still open
+
+- **Ad provider**: the `ads` table accepts an embeddable URL per campaign, but a real rewarded-ad
+  provider (e.g. Google Ad Manager rewarded web) still needs choosing and an admin screen.
 
 - **Fridge/freezer duty cycle**: compressors are sized as running for every hour entered. A user
   entering "24 hours" for a fridge gets ~2–3× its real daily energy. Options: catalogue duty-cycle

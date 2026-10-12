@@ -1,6 +1,6 @@
 
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -20,11 +20,15 @@ const Auth = () => {
   const [error, setError] = useState<string | null>(null);
   const { signIn, signUp, user } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  // Only same-site paths, so the parameter can't be used as an open redirect.
+  const nextParam = searchParams.get('next') ?? '/';
+  const next = nextParam.startsWith('/') && !nextParam.startsWith('//') ? nextParam : '/';
   const { toast } = useToast();
 
   // Redirect if already authenticated
   if (user) {
-    navigate('/');
+    navigate(next);
     return null;
   }
 
@@ -75,13 +79,13 @@ const Auth = () => {
             title: "Welcome back!",
             description: "You have successfully signed in.",
           });
-          navigate('/');
+          navigate(next);
         } else {
           toast({
             title: "Account created!",
             description: "You're signed in and can now save quotes.",
           });
-          navigate('/');
+          navigate(next);
         }
       }
     } catch (err) {

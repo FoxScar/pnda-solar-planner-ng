@@ -52,8 +52,20 @@ Further roles are assigned from the admin panel at `/admin`.
 
 ## API
 
-Key endpoints: `POST /api/v1/calculate` (sizing engine; guests allowed, 10/min), `POST /api/v1/validate-config`,
-`GET /api/v1/appliances`, `GET /api/v1/sun-hours`, `/api/v1/quotes`, `/api/v1/admin/*`.
+Key endpoints:
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /api/v1/calculate` | Sizing engine (guests allowed, 10/min) |
+| `POST /api/v1/quotes` | Save a calculation as a quote |
+| `GET /api/v1/quotes/:id` · `/pdf` | Quote detail and PDF (PDF ad-gated for free users) |
+| `POST /api/v1/quotes/:id/ad/start` · `/complete` | Server-verified ad gate |
+| `GET /api/v1/public/quotes/:token` · `/pdf` | Public share link, valid 30 days |
+| `POST /api/v1/validate-config` | Check an inverter/battery combination |
+| `GET /api/v1/appliances`, `/sun-hours` | Public catalogue |
+| `/api/v1/admin/*` | Components, appliances, sun hours, users, audit log |
+
+`npx tsx server/scripts/sample-pdf.ts out.pdf` renders a sample quotation without a database.
 
 The sizing engine is a pure module in `server/engine/` with 100% test coverage enforced
 (`npm run test:coverage`); reference designs are documented in `docs/reference-designs.md`.

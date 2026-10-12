@@ -4,6 +4,8 @@ const envSchema = z.object({
   DATABASE_URL: z.string().url(),
   BETTER_AUTH_SECRET: z.string().min(32, "BETTER_AUTH_SECRET must be at least 32 characters"),
   BETTER_AUTH_URL: z.string().url(),
+  /** Public web origin for share links; defaults to BETTER_AUTH_URL. */
+  PUBLIC_APP_URL: z.string().url().optional(),
   PORT: z.coerce.number().int().positive().default(8787),
 });
 

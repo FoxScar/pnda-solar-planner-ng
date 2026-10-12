@@ -11,6 +11,7 @@ import { adminRoutes } from "./routes/admin";
 import { calculateRoutes } from "./routes/calculate";
 import { catalogRoutes } from "./routes/catalog";
 import { meRoutes } from "./routes/me";
+import { publicRoutes } from "./routes/public";
 import { quoteRoutes } from "./routes/quotes";
 
 /** Maps Postgres constraint violations to client errors instead of 500s. */
@@ -27,7 +28,7 @@ function fromPostgresError(err: unknown): ApiError | null {
   return null;
 }
 
-export function createApp({ db, auth }: { db: Db; auth: Auth }) {
+export function createApp({ db, auth, publicUrl }: { db: Db; auth: Auth; publicUrl: string }) {
   const app = new Hono<AppEnv>();
 
   app.use(secureHeaders());
@@ -35,6 +36,7 @@ export function createApp({ db, auth }: { db: Db; auth: Auth }) {
   app.use(async (c, next) => {
     c.set("db", db);
     c.set("auth", auth);
+    c.set("publicUrl", publicUrl.replace(/\/$/, ""));
     await next();
   });
 
@@ -50,6 +52,7 @@ export function createApp({ db, auth }: { db: Db; auth: Auth }) {
     .route("/", calculateRoutes)
     .route("/me", meRoutes)
     .route("/quotes", quoteRoutes)
+    .route("/public", publicRoutes)
     .route("/admin", adminRoutes);
 
   app.route("/api/v1", v1);

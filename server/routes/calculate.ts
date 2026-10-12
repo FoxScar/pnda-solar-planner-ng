@@ -29,6 +29,7 @@ import { ApiError, ok } from "../lib/http";
 import { requireAuth } from "../lib/middleware";
 import { consumeRateLimit, rateLimitKey } from "../lib/rate-limit";
 import { validate } from "../lib/validate";
+import { systemView } from "../quotes/service";
 
 /** PRD §20.3: 10 calculation requests per user per minute. */
 const CALC_LIMIT_PER_MINUTE = 10;
@@ -132,23 +133,6 @@ async function loadCatalogue(db: Db): Promise<Catalogue> {
   };
 }
 
-/** What a consumer sees: the system, not the load analysis (FR-003). */
-function publicSystem(r: EngineResult) {
-  return {
-    systemVoltage: r.systemVoltage,
-    batteryChemistry: r.batteryChemistry,
-    inverter: { model: r.inverter.inverter.model, kva: r.inverter.inverter.kva },
-    battery: {
-      model: r.battery.battery.model,
-      units: r.battery.totalUnits,
-      seriesCount: r.battery.seriesCount,
-      parallelStrings: r.battery.parallelStrings,
-      installedKwh: r.battery.installedKwh,
-    },
-    panels: { model: r.panels.panel.model, wattsPeak: r.panels.panel.wattsPeak, count: r.panels.count, arrayKwp: r.panels.arrayKwp },
-  };
-}
-
 export const calculateRoutes = new Hono<AppEnv>()
   /**
    * Main solar decision engine endpoint (PRD §22.2). Guests may calculate
@@ -208,7 +192,7 @@ export const calculateRoutes = new Hono<AppEnv>()
     return ok(c, {
       calculationId: audit!.id,
       state: body.state,
-      system: publicSystem(result),
+      system: systemView(result),
       bom: result.bom,
       pricing: priceBom(result.bom),
       warnings,

@@ -1,9 +1,14 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { AlertTriangle, Battery, Info, Loader2, PanelsTopLeft, Sun, Zap } from "lucide-react";
+import { AlertTriangle, Battery, FileText, Info, Loader2, PanelsTopLeft, Sun, Zap } from "lucide-react";
 import { api, ApiClientError } from '@/lib/api';
 import { formatPrice } from './utils/formatters';
 
@@ -32,6 +37,26 @@ const SystemResult = ({ onBack, data }) => {
   const [result, setResult] = useState<CalculationResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [clientName, setClientName] = useState('');
+  const [saving, setSaving] = useState(false);
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const { toast } = useToast();
+
+  const saveQuote = async () => {
+    if (!result) return;
+    setSaving(true);
+    try {
+      const quote = await api<{ id: string }>('/quotes', {
+        method: 'POST',
+        json: { calculationId: result.calculationId, clientName: clientName || undefined },
+      });
+      navigate(`/quote/${quote.id}`);
+    } catch (err) {
+      toast({ title: "Couldn't save quote", description: err instanceof ApiClientError ? err.message : 'Please try again.', variant: 'destructive' });
+      setSaving(false);
+    }
+  };
 
   useEffect(() => {
     const body = {
@@ -129,31 +154,29 @@ const SystemResult = ({ onBack, data }) => {
               <TableRow>
                 <TableHead>Item</TableHead>
                 <TableHead className="text-right">Qty</TableHead>
-                <TableHead className="text-right">Unit price</TableHead>
                 <TableHead className="text-right">Total</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {result.bom.map((line) => (
                 <TableRow key={line.sku}>
-                  <TableCell>{line.model}</TableCell>
+                  <TableCell>{line.model}<span className="block text-xs text-gray-500">{formatPrice(line.unitPriceNgn)} each</span></TableCell>
                   <TableCell className="text-right">{line.quantity}</TableCell>
-                  <TableCell className="text-right">{formatPrice(line.unitPriceNgn)}</TableCell>
                   <TableCell className="text-right">{formatPrice(line.quantity * line.unitPriceNgn)}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
             <TableFooter>
               <TableRow>
-                <TableCell colSpan={3}>Equipment subtotal</TableCell>
+                <TableCell colSpan={2}>Equipment subtotal</TableCell>
                 <TableCell className="text-right">{formatPrice(pricing.equipmentSubtotalNgn)}</TableCell>
               </TableRow>
               <TableRow>
-                <TableCell colSpan={3}>VAT ({pricing.vatRate * 100}%)</TableCell>
+                <TableCell colSpan={2}>VAT ({pricing.vatRate * 100}%)</TableCell>
                 <TableCell className="text-right">{formatPrice(pricing.vatNgn)}</TableCell>
               </TableRow>
               <TableRow>
-                <TableCell colSpan={3} className="font-bold">Estimated total</TableCell>
+                <TableCell colSpan={2} className="font-bold">Estimated total</TableCell>
                 <TableCell className="text-right font-bold">{formatPrice(pricing.totalNgn)}</TableCell>
               </TableRow>
             </TableFooter>
@@ -162,6 +185,26 @@ const SystemResult = ({ onBack, data }) => {
         <p className="text-xs text-gray-500">
           Equipment prices only — installation labour is quoted by your installer. Accuracy depends on the appliances and hours you entered.
         </p>
+
+        <div className="rounded-lg border bg-orange-50/50 p-4 space-y-3">
+          <p className="font-medium flex items-center gap-2"><FileText className="w-4 h-4 text-orange-500" />Get your quote</p>
+          {user ? (
+            <>
+              <div className="space-y-1">
+                <Label htmlFor="client-name">Name on the quote (optional)</Label>
+                <Input id="client-name" value={clientName} maxLength={80} onChange={(e) => setClientName(e.target.value)} placeholder="e.g. Mrs Adaeze Okafor" />
+              </div>
+              <Button onClick={saveQuote} disabled={saving} className="w-full min-h-12 bg-gradient-to-r from-orange-500 to-yellow-500 hover:from-orange-600 hover:to-yellow-600">
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save quote — PDF & WhatsApp'}
+              </Button>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-gray-600">Create a free account to save this quote, download the PDF and share it on WhatsApp.</p>
+              <Button onClick={() => navigate('/auth?next=/')} className="w-full min-h-12">Sign in to save your quote</Button>
+            </>
+          )}
+        </div>
 
         <Button variant="outline" onClick={onBack} className="w-full">Change Location or Battery</Button>
       </CardContent>

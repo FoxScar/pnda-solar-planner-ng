@@ -12,6 +12,8 @@ export interface SessionUser {
 
 export interface AppEnv {
   Variables: {
+    /** Public origin of the web app, used to build share links. */
+    publicUrl: string;
     requestId: string;
     db: Db;
     auth: Auth;

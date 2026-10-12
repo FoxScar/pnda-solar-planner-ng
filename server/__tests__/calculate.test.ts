@@ -160,7 +160,7 @@ describe("POST /api/v1/calculate", () => {
     for (let i = 0; i < 11; i++) {
       statuses.push((await h.request("/api/v1/calculate", { method: "POST", headers, json: body })).status);
     }
-    expect(statuses.slice(0, 10).every((s) => s === 200)).toBe(true);
+    expect(statuses.slice(0, 10)).toEqual(Array(10).fill(200));
     expect(statuses[10]).toBe(429);
 
     // The window resets after a minute.
