@@ -40,16 +40,22 @@ npm run admin:promote -- you@example.com
 
 Further roles are assigned from the admin panel at `/admin`.
 
-## Deployment (Render, free tier)
+## Deployment (free tier)
 
-`render.yaml` defines one free Node web service (API + built frontend, Frankfurt) and a free
-Postgres database. In the Render dashboard: **New → Blueprint → select this repository → Apply**.
-Render generates `BETTER_AUTH_SECRET`; the public URL comes from `RENDER_EXTERNAL_URL`.
-Migrations and seed data run on every start. Pushes to `main` redeploy automatically.
+Live at **https://pandasolution.onrender.com**.
 
-Free-tier limits: the service sleeps after 15 minutes idle (~1 minute to wake), and Render's free
-Postgres expires 30 days after creation — move `DATABASE_URL` to a permanent database (e.g. Neon
-free tier) before then.
+| Piece | Where |
+|---|---|
+| Web service (API + built frontend, one origin) | Render free plan, Frankfurt — `render.yaml` |
+| Database | Neon free Postgres, `aws-eu-central-1`, project `pandasolution` |
+| Auth secret | Render environment variable `BETTER_AUTH_SECRET` |
+
+Pushes to `main` redeploy automatically; migrations and seed data run on every start (both are
+idempotent). `BETTER_AUTH_URL`/`PUBLIC_APP_URL` default to Render's `RENDER_EXTERNAL_URL` — set them
+when a custom domain is added.
+
+Free-tier limits: the Render service sleeps after 15 minutes idle (about a minute to wake);
+Neon's free plan allows 0.5 GB of storage.
 
 ## Scripts
 
