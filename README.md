@@ -40,6 +40,17 @@ npm run admin:promote -- you@example.com
 
 Further roles are assigned from the admin panel at `/admin`.
 
+## Deployment (Render, free tier)
+
+`render.yaml` defines one free Node web service (API + built frontend, Frankfurt) and a free
+Postgres database. In the Render dashboard: **New → Blueprint → select this repository → Apply**.
+Render generates `BETTER_AUTH_SECRET`; the public URL comes from `RENDER_EXTERNAL_URL`.
+Migrations and seed data run on every start. Pushes to `main` redeploy automatically.
+
+Free-tier limits: the service sleeps after 15 minutes idle (~1 minute to wake), and Render's free
+Postgres expires 30 days after creation — move `DATABASE_URL` to a permanent database (e.g. Neon
+free tier) before then.
+
 ## Scripts
 
 | Command | What it does |

@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 
 export interface PdfAssets {
   regular: Uint8Array;
@@ -15,7 +16,11 @@ let cached: Promise<PdfAssets> | null = null;
  */
 export function loadPdfAssets(): Promise<PdfAssets> {
   cached ??= (async () => {
-    const at = (name: string) => readFile(new URL(`./assets/${name}`, import.meta.url));
+    // Next to this module locally; from the project root in bundled serverless deployments.
+    const at = (name: string) =>
+      readFile(new URL(`./assets/${name}`, import.meta.url)).catch(() =>
+        readFile(join(process.cwd(), "server/pdf/assets", name)),
+      );
     const [regular, bold, logoJpg] = await Promise.all([at("DejaVuSans.ttf"), at("DejaVuSans-Bold.ttf"), at("logo.jpg")]);
     return { regular, bold, logoJpg };
   })();

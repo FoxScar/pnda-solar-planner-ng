@@ -1,0 +1,33 @@
+# Render Blueprint: one free web service (API + frontend) and a free Postgres database.
+# Create it from the dashboard: New → Blueprint → select this repository.
+services:
+  - type: web
+    name: pandasolution
+    runtime: node
+    plan: free
+    region: frankfurt # closest Render region to Nigeria
+    branch: main
+    buildCommand: npm ci && npm run build
+    # Migrations and seed are idempotent, so running them on every start is safe.
+    startCommand: npm run db:migrate && npm run db:seed && npm start
+    healthCheckPath: /api/v1/health
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: pandasolution-db
+          property: connectionString
+      - key: BETTER_AUTH_SECRET
+        generateValue: true
+      - key: STATIC_DIR
+        value: dist
+      # BETTER_AUTH_URL / PUBLIC_APP_URL default to Render's RENDER_EXTERNAL_URL.
+      # Set them when a custom domain is added.
+
+databases:
+  - name: pandasolution-db
+    plan: free
+    region: frankfurt
+    databaseName: pandasolution
+    user: panda
+    postgresMajorVersion: "16"
