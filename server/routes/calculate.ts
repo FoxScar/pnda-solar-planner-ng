@@ -61,6 +61,8 @@ export const calculateBody = z
     state: z.enum(NIGERIAN_STATES),
     batteryChemistry: z.enum(BATTERY_CHEMISTRIES).default("lithium"),
     engineerOverride: z.boolean().default(false),
+    /** Customer's chosen panel; omitted = best-value panel chosen by the engine. */
+    panelId: z.string().uuid().optional(),
     appliances: z.array(applianceLine).min(1, "Add at least one appliance.").max(60),
   })
   .strict();
@@ -137,6 +139,13 @@ export const calculateRoutes = new Hono<AppEnv>()
       resolveSunHours(db, body.state),
       loadCatalogue(db),
     ]);
+    if (body.panelId) {
+      const chosen = catalogue.panels.filter((p) => p.id === body.panelId);
+      if (chosen.length === 0) {
+        throw new ApiError(400, "INVALID_PAYLOAD", "The selected solar panel is no longer available. Please choose another.", "panelId");
+      }
+      catalogue.panels = chosen;
+    }
     const auditInputs = { request: body, loads, sunHours: sun, settings };
 
     let result: EngineResult;

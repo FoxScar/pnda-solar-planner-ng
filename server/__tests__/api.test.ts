@@ -119,6 +119,8 @@ describe("admin inventory management", () => {
     expect((entry!.before as { unitPriceNgn: number }).unitPriceNgn).toBe(panel!.unitPriceNgn);
     expect((entry!.after as { unitPriceNgn: number }).unitPriceNgn).toBe(125_000);
     expect(entry!.requestId).toBeTruthy();
+    // Restore: other test files rely on seeded prices (best-value panel choice).
+    await h.request(`/api/v1/admin/components/${panel!.id}`, { method: "PATCH", cookie, json: { unitPriceNgn: panel!.unitPriceNgn } });
   });
 
   it("rejects a ₦0 price", async () => {

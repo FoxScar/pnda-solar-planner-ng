@@ -209,6 +209,32 @@ describe("POST /api/v1/calculate", () => {
     expect(read.body?.data.engine.powerFactor).toBe(0.8);
   });
 
+  it("lists the panels customers can choose and sizes with the chosen one", async () => {
+    const list = await h.request("/api/v1/panels");
+    const panels = list.body?.data as { id: string; model: string; wattsPeak: number; performanceFactor: number }[];
+    expect(panels.map((p) => p.model)).toEqual(expect.arrayContaining(["Jinko 620W", "JA Solar 590W", "Flames 600W"]));
+    expect(panels.find((p) => p.model === "Flames 600W")?.performanceFactor).toBe(0.65);
+
+    const pick = async (model: string) => {
+      const res = await h.request("/api/v1/calculate", {
+        method: "POST",
+        headers: guest(),
+        json: { ...(await ref001Body()), panelId: panels.find((p) => p.model === model)!.id },
+      });
+      expect(res.status).toBe(200);
+      return res.body?.data.system.panels as { model: string; count: number };
+    };
+    const jinko = await pick("Jinko 620W");
+    const flames = await pick("Flames 600W");
+    expect(jinko.model).toBe("Jinko 620W");
+    expect(flames.model).toBe("Flames 600W");
+    expect(flames.count).toBeGreaterThan(jinko.count); // 65% vs 80% efficiency
+
+    const bad = await h.request("/api/v1/calculate", { method: "POST", headers: guest(), json: { ...(await ref001Body()), panelId: crypto.randomUUID() } });
+    expect(bad.status).toBe(400);
+    expect(bad.body?.error.field).toBe("panelId");
+  });
+
   it("rate-limits to 10 calculations per minute per client", async () => {
     const headers = guest();
     const body = await ref001Body();

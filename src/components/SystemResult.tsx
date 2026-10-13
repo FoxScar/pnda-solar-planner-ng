@@ -62,6 +62,7 @@ const SystemResult = ({ onBack, data }) => {
     const body = {
       state: data.location?.state,
       batteryChemistry: data.location?.batteryChemistry ?? 'lithium',
+      ...(data.location?.panelId ? { panelId: data.location.panelId } : {}),
       appliances: (data.appliances ?? []).map((a) => ({
         applianceId: a.applianceId,
         quantity: a.quantity,
@@ -135,7 +136,7 @@ const SystemResult = ({ onBack, data }) => {
           <div className="rounded-lg border p-4">
             <PanelsTopLeft className="w-5 h-5 text-yellow-500 mb-2" />
             <p className="font-semibold">{system.panels.count} solar panels</p>
-            <p className="text-sm text-gray-600">{system.panels.wattsPeak}W each · {fmt(system.panels.arrayKwp)}kW total</p>
+            <p className="text-sm text-gray-600">{system.panels.model} · {fmt(system.panels.arrayKwp)}kW total</p>
           </div>
         </div>
 
@@ -214,7 +215,7 @@ const SystemResult = ({ onBack, data }) => {
           )}
         </div>
 
-        <Button variant="outline" onClick={onBack} className="w-full">Change Location or Battery</Button>
+        <Button variant="outline" onClick={onBack} className="w-full">Change Location, Battery or Panels</Button>
       </CardContent>
     </Card>
   );

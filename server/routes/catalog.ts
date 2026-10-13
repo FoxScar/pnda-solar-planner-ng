@@ -29,6 +29,22 @@ export const catalogRoutes = new Hono<AppEnv>()
     return ok(c, rows);
   })
 
+  /** Panels a customer can choose from (schematics §4: each has its own performance factor). */
+  .get("/panels", async (c) => {
+    const rows = await c.var.db
+      .select({
+        id: components.id,
+        brand: components.brand,
+        model: components.model,
+        wattsPeak: components.wattsPeak,
+        performanceFactor: components.performanceFactor,
+      })
+      .from(components)
+      .where(and(eq(components.type, "panel"), eq(components.isActive, true)))
+      .orderBy(asc(components.brand), asc(components.wattsPeak));
+    return ok(c, rows);
+  })
+
   /** Day/night windows the wizard uses to label and limit appliance hours (schematics §1). */
   .get("/config", async (c) => {
     const { engine } = await loadSettings(c.var.db);

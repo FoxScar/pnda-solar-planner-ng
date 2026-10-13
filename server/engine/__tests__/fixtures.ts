@@ -7,12 +7,16 @@ export const settings = (over: Partial<EngineSettings> = {}): EngineSettings => 
 const noInverterSpecs = { efficiency: null, continuousW: null, surgeW: null, maxPvInputW: null, maxPvVoc: null, maxPvIsc: null, mpptCount: null };
 const noBatterySpecs = { depthOfDischarge: null, dischargeEfficiency: null, maxDischargeW: null };
 
-/** The seeded Felicity catalogue, shaped for the engine (ids = SKUs for readability). */
-export function seedCatalogue(): Catalogue {
+/**
+ * The seeded catalogue, shaped for the engine (ids = SKUs for readability).
+ * Panels default to the 400 W reference panel so reference designs stay stable
+ * as brands are added; pass `allPanels` for the full seeded range.
+ */
+export function seedCatalogue({ allPanels = false }: { allPanels?: boolean } = {}): Catalogue {
   return {
     inverters: INVERTERS.map((i) => ({ id: i.sku, sku: i.sku, model: i.model, kva: i.kva, dcVoltage: i.dcVoltage, unitPriceNgn: i.unitPriceNgn, ...noInverterSpecs })),
     batteries: BATTERIES.map((b) => ({ id: b.sku, sku: b.sku, model: b.model, chemistry: b.chemistry, dcVoltage: b.dcVoltage, capacityKwh: b.capacityKwh, capacityAh: b.capacityAh, unitPriceNgn: b.unitPriceNgn, ...noBatterySpecs })),
-    panels: PANELS.map((p) => ({ id: p.sku, sku: p.sku, model: p.model, wattsPeak: p.wattsPeak, unitPriceNgn: p.unitPriceNgn, performanceFactor: p.performanceFactor, voc: null, isc: null })),
+    panels: PANELS.filter((p) => allPanels || p.sku === "PNL-MONO-400").map((p) => ({ id: p.sku, sku: p.sku, model: p.model, wattsPeak: p.wattsPeak, unitPriceNgn: p.unitPriceNgn, performanceFactor: p.performanceFactor, voc: null, isc: null })),
   };
 }
 

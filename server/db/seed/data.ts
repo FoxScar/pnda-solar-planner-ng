@@ -96,9 +96,14 @@ export const BATTERIES = (
   ] satisfies BatterySeed[]
 ).map((b) => ({ ...b, type: "battery" as const, brand: "Felicity", capacityAh: b.capacityAh ?? null }));
 
+// Performance factors as supplied by the owner (usable output vs nameplate, losses included).
+// Prices are PLACEHOLDERS: set real ones in the admin panel.
 export const PANELS = [
-  { sku: "PNL-MONO-400", model: "400Wp Monocrystalline PERC", wattsPeak: 400, unitPriceNgn: 110_000 },
-].map((p) => ({ ...p, type: "panel" as const, brand: "Generic", performanceFactor: 0.8 }));
+  { sku: "PNL-MONO-400", brand: "Generic", model: "400Wp Monocrystalline PERC", wattsPeak: 400, performanceFactor: 0.8, unitPriceNgn: 110_000 },
+  { sku: "PNL-JINKO-620", brand: "Jinko", model: "Jinko 620W", wattsPeak: 620, performanceFactor: 0.8, unitPriceNgn: 175_000 },
+  { sku: "PNL-JA-590", brand: "JA Solar", model: "JA Solar 590W", wattsPeak: 590, performanceFactor: 0.8, unitPriceNgn: 165_000 },
+  { sku: "PNL-FLAMES-600", brand: "Flames", model: "Flames 600W", wattsPeak: 600, performanceFactor: 0.65, unitPriceNgn: 135_000 },
+].map((p) => ({ ...p, type: "panel" as const }));
 
 // ---------------------------------------------------------------------------
 // Appliance catalogue (FR-001: 60+ Nigerian household and commercial items).

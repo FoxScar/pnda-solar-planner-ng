@@ -212,6 +212,19 @@ describe("panel sizing (§4) and PV input (§5)", () => {
     expect(sizePanels(profile, 0, 5, [options[0]!, { ...options[1]!, unitPriceNgn: 201 }], inverter({}))!.panel.sku).toBe("P400");
   });
 
+  it("sizes each panel brand with its own performance factor", () => {
+    const all = seedCatalogue({ allPanels: true });
+    const only = (sku: string) => calculateSystem(input({ catalogue: { ...all, panels: all.panels.filter((p) => p.sku === sku) } })).panels;
+    const jinko = only("PNL-JINKO-620");
+    const ja = only("PNL-JA-590");
+    const flames = only("PNL-FLAMES-600");
+    expect(jinko.effectivePanelW).toBeCloseTo(496, 9); // 620 × 0.80
+    expect(ja.effectivePanelW).toBeCloseTo(472, 9); // 590 × 0.80
+    expect(flames.effectivePanelW).toBeCloseTo(390, 9); // 600 × 0.65
+    expect(flames.count).toBeGreaterThan(jinko.count);
+    expect(calculateSystem(input({ catalogue: all })).panels.panel.sku).toMatch(/^PNL-/);
+  });
+
   it("reports NO_SKU_AVAILABLE with no panels in stock", () => {
     expectEngineError(() => calculateSystem(input({ catalogue: { ...seedCatalogue(), panels: [] } })), "NO_SKU_AVAILABLE");
   });

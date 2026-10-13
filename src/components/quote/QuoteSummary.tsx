@@ -58,7 +58,7 @@ const QuoteSummary = ({ quote }: { quote: QuoteView }) => {
         <div className="rounded-lg border p-4">
           <PanelsTopLeft className="w-5 h-5 text-yellow-500 mb-2" />
           <p className="font-semibold">{system.panels.count} solar panels</p>
-          <p className="text-sm text-gray-600">{system.panels.wattsPeak}W each · {fmt(system.panels.arrayKwp)}kW</p>
+          <p className="text-sm text-gray-600">{system.panels.model} · {fmt(system.panels.arrayKwp)}kW</p>
         </div>
       </div>
 
