@@ -2,22 +2,17 @@
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Info, Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
+import AppliancePicker, { type CatalogueAppliance } from "./wizard/AppliancePicker";
+import Stepper from "./wizard/Stepper";
 import { api } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
-interface CatalogueAppliance {
-  id: string;
-  name: string;
-  category: string;
-}
-
 const ApplianceSelection = ({ onNext, onBack, data }) => {
-  const [appliances, setAppliances] = useState(data?.appliances || []);
+  // Start with one empty card so the first action is choosing a device, not finding the Add button.
+  const [appliances, setAppliances] = useState(() =>
+    data?.appliances?.length ? data.appliances : [{ id: Date.now(), applianceId: null, name: '', quantity: 1, dayHours: 0, nightHours: 0 }]
+  );
   const [availableAppliances, setAvailableAppliances] = useState<CatalogueAppliance[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
@@ -207,155 +202,101 @@ const ApplianceSelection = ({ onNext, onBack, data }) => {
   }
 
   return (
-    <TooltipProvider>
-      <Card className="w-full max-w-2xl mx-auto">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            Select Your Appliances
-            <Tooltip>
-              <TooltipTrigger>
-                <Info className="w-4 h-4 text-gray-400" />
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Choose all the appliances you want to power with your solar system</p>
-              </TooltipContent>
-            </Tooltip>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {appliances.map((appliance, index) => (
-            <Card key={appliance.id} className="p-4 bg-gray-50">
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <Label className="text-sm font-medium">Appliance {index + 1}</Label>
-                  {appliances.length > 0 && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => removeAppliance(appliance.id)}
-                      className="text-red-500 hover:text-red-700"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  )}
-                </div>
+    <Card className="w-full max-w-2xl mx-auto">
+      <CardHeader className="px-4 sm:px-6">
+        <CardTitle className="text-xl sm:text-2xl">Select Your Appliances</CardTitle>
+        <p className="text-sm text-gray-600">
+          Add everything you want to power, and how many hours each one actually runs in the day ({dayLabel}) and at night ({nightLabel}).
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-4 px-4 sm:px-6">
+        {appliances.map((appliance, index) => (
+          <div key={appliance.id} className="rounded-lg border bg-gray-50 p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">Appliance {index + 1}</span>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => removeAppliance(appliance.id)}
+                className="h-11 w-11 text-red-500 hover:text-red-700"
+                aria-label={`Remove appliance ${index + 1}`}
+              >
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor={`appliance-${appliance.id}`}>Device</Label>
-                    <Select 
-                      value={appliance.name || ""}
-                      onValueChange={(value) => handleApplianceSelect(appliance.id, value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Choose appliance" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-white border border-gray-200 shadow-lg z-50">
-                        {availableAppliances.map((item) => (
-                          <SelectItem key={item.id} value={item.name}>
-                            {item.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+            <div className="space-y-2">
+              <label htmlFor={`appliance-${appliance.id}`} className="text-sm font-medium leading-none">Device</label>
+              <AppliancePicker
+                id={`appliance-${appliance.id}`}
+                appliances={availableAppliances}
+                value={appliance.applianceId}
+                onSelect={(a) => handleApplianceSelect(appliance.id, a.name)}
+              />
+            </div>
 
-                  <div>
-                    <Label htmlFor={`quantity-${appliance.id}`}>Quantity</Label>
-                    <Input
-                      id={`quantity-${appliance.id}`}
-                      type="number"
-                      min="1"
-                      value={appliance.quantity}
-                      onChange={(e) => updateAppliance(appliance.id, 'quantity', parseInt(e.target.value) || 1)}
-                    />
-                  </div>
-                </div>
+            <Stepper
+              id={`quantity-${appliance.id}`}
+              label="Quantity"
+              value={appliance.quantity}
+              min={1}
+              max={100}
+              step={1}
+              onChange={(v) => updateAppliance(appliance.id, 'quantity', v)}
+            />
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor={`dayHours-${appliance.id}`} className="flex items-center gap-1">
-                      Day Hours ({dayLabel})
-                      <Tooltip>
-                        <TooltipTrigger>
-                          <Info className="w-3 h-3 text-gray-400" />
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Hours this appliance actually runs between {dayLabel} (max {windows.dayHours})</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </Label>
-                    <Input
-                      id={`dayHours-${appliance.id}`}
-                      type="number"
-                      min="0"
-                      max={windows.dayHours}
-                      step="0.5"
-                      value={appliance.dayHours || 0}
-                      onChange={(e) => updateAppliance(appliance.id, 'dayHours', parseFloat(e.target.value) || 0)}
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor={`nightHours-${appliance.id}`} className="flex items-center gap-1">
-                      Night Hours ({nightLabel})
-                      <Tooltip>
-                        <TooltipTrigger>
-                          <Info className="w-3 h-3 text-gray-400" />
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Hours this appliance actually runs between {nightLabel} (max {windows.nightHours})</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </Label>
-                    <Input
-                      id={`nightHours-${appliance.id}`}
-                      type="number"
-                      min="0"
-                      max={windows.nightHours}
-                      step="0.5"
-                      value={appliance.nightHours || 0}
-                      onChange={(e) => updateAppliance(appliance.id, 'nightHours', parseFloat(e.target.value) || 0)}
-                    />
-                  </div>
-                </div>
-
-                {/* Validation feedback for hours */}
-                {(appliance.dayHours + appliance.nightHours) > 20 && (
-                  <div className="bg-amber-50 p-3 rounded-md">
-                    <p className="text-sm text-amber-700">
-                      ⚠️ Total usage: {appliance.dayHours + appliance.nightHours} hours/day
-                    </p>
-                  </div>
-                )}
-              </div>
-            </Card>
-          ))}
-
-          <Button
-            variant="outline"
-            onClick={addAppliance}
-            className="w-full border-dashed border-2 border-gray-300 py-6"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Add Another Appliance
-          </Button>
-
-          <div className="flex gap-4 pt-4">
-            <Button variant="outline" onClick={onBack} className="flex-1">
-              Back
-            </Button>
-            <Button 
-              onClick={handleNext} 
-              disabled={!isValid}
-              className="flex-1 bg-gradient-to-r from-orange-500 to-yellow-500 hover:from-orange-600 hover:to-yellow-600"
-            >
-              Next: Your Location
-            </Button>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Stepper
+                id={`dayHours-${appliance.id}`}
+                label="Daytime use"
+                hint={`${dayLabel}, up to ${windows.dayHours}h`}
+                value={appliance.dayHours}
+                min={0}
+                max={windows.dayHours}
+                step={0.5}
+                unit="hrs"
+                slider
+                onChange={(v) => updateAppliance(appliance.id, 'dayHours', v)}
+              />
+              <Stepper
+                id={`nightHours-${appliance.id}`}
+                label="Night-time use"
+                hint={`${nightLabel}, up to ${windows.nightHours}h`}
+                value={appliance.nightHours}
+                min={0}
+                max={windows.nightHours}
+                step={0.5}
+                unit="hrs"
+                slider
+                onChange={(v) => updateAppliance(appliance.id, 'nightHours', v)}
+              />
+            </div>
           </div>
-        </CardContent>
-      </Card>
-    </TooltipProvider>
+        ))}
+
+        <Button
+          variant="outline"
+          onClick={addAppliance}
+          className="w-full border-dashed border-2 border-gray-300 min-h-14"
+        >
+          <Plus className="w-4 h-4 mr-2" />
+          {appliances.length === 0 ? 'Add an Appliance' : 'Add Another Appliance'}
+        </Button>
+
+        <div className="flex gap-3 pt-2">
+          <Button variant="outline" onClick={onBack} className="flex-1 min-h-12">
+            Back
+          </Button>
+          <Button
+            onClick={handleNext}
+            disabled={!isValid}
+            className="flex-[2] min-h-12 bg-gradient-to-r from-orange-500 to-yellow-500 hover:from-orange-600 hover:to-yellow-600"
+          >
+            Next: Your Location
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 };
 

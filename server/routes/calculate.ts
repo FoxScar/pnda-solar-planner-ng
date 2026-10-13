@@ -33,6 +33,11 @@ import { systemView } from "../quotes/service";
 
 /** PRD §20.3: 10 calculation requests per user per minute. */
 const CALC_LIMIT_PER_MINUTE = 10;
+/**
+ * Guests are counted per IP. Nigerian mobile networks put many customers behind
+ * one shared IP (carrier-grade NAT), so the per-IP allowance is higher.
+ */
+const GUEST_CALC_LIMIT_PER_MINUTE = 60;
 
 const usage = {
   quantity: z.number().int().min(1).max(100),
@@ -120,7 +125,7 @@ export const calculateRoutes = new Hono<AppEnv>()
     if (body.engineerOverride && !(user && hasRoleAtLeast(user.role, "engineer"))) {
       throw new ApiError(403, "FORBIDDEN", "Only engineers can override recommendations.", "engineerOverride");
     }
-    await consumeRateLimit(db, rateLimitKey(c, "calculate"), CALC_LIMIT_PER_MINUTE, 60);
+    await consumeRateLimit(db, rateLimitKey(c, "calculate"), user ? CALC_LIMIT_PER_MINUTE : GUEST_CALC_LIMIT_PER_MINUTE, 60);
 
     const settings = await loadSettings(db);
     // Schematics §1: runtime is the hours actually used inside each period, so it can't exceed the window.

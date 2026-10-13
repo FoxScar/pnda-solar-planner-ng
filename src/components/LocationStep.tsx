@@ -3,7 +3,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { MapPin, Info } from "lucide-react";
 import type { BatteryChemistry } from '../../shared/domain';
@@ -66,12 +65,16 @@ const LocationStep = ({ onNext, onBack, data }) => {
       <CardContent className="space-y-6">
         <div className="space-y-2">
           <Label htmlFor="state">State</Label>
-          <Select value={state} onValueChange={setState}>
-            <SelectTrigger id="state"><SelectValue placeholder="Select your state" /></SelectTrigger>
-            <SelectContent className="max-h-72">
-              {states.map((s) => <SelectItem key={s} value={s}>{s === 'FCT' ? 'FCT (Abuja)' : s}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          {/* Native select: the phone's own picker is the most reliable control for a 37-item list. */}
+          <select
+            id="state"
+            value={state}
+            onChange={(e) => setState(e.target.value)}
+            className="flex h-12 w-full rounded-md border border-input bg-background px-3 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          >
+            <option value="" disabled>Select your state</option>
+            {states.map((s) => <option key={s} value={s}>{s === 'FCT' ? 'FCT (Abuja)' : s}</option>)}
+          </select>
           <p className="text-sm text-gray-600">Sunshine varies across Nigeria, so your state changes how many panels you need.</p>
         </div>
 

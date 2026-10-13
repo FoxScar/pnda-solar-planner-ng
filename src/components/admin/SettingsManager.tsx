@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { NativeSelect } from "@/components/ui/native-select";
 import { Save } from "lucide-react";
 import type { EngineSettings, PricingSettings } from "../../../shared/settings";
 import { api } from "@/lib/api";
@@ -49,11 +49,11 @@ const SettingsManager = () => {
   };
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className="border-0 shadow-none sm:border sm:shadow-sm">
+      <CardHeader className="px-0 sm:px-6">
         <CardTitle>Calculation Settings</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-6">
+      <CardContent className="px-0 sm:px-6 space-y-6">
         <p className="text-sm text-gray-600">
           Defaults follow the Developer Calculation Schematics. Values on a product's datasheet specs always take precedence over these defaults.
         </p>
@@ -104,14 +104,7 @@ const SettingsManager = () => {
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1">
               <Label>Sun hours used for sizing</Label>
-              <Select value={engine.sunHoursBasis} onValueChange={(v) => setEngine({ sunHoursBasis: v as EngineSettings["sunHoursBasis"] })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="wet">Wet season (works all year)</SelectItem>
-                  <SelectItem value="annual">Annual average</SelectItem>
-                  <SelectItem value="dry">Dry season</SelectItem>
-                </SelectContent>
-              </Select>
+              <NativeSelect value={engine.sunHoursBasis} onValueChange={(v) => setEngine({ sunHoursBasis: v as EngineSettings["sunHoursBasis"] })} options={[{ value: "wet", label: "Wet season (works all year)" }, { value: "annual", label: "Annual average" }, { value: "dry", label: "Dry season" }]} />
             </div>
             <div className="flex items-start gap-3 pt-6">
               <Switch id="pv-strict" checked={engine.requireVerifiedPvLimits} onCheckedChange={(v) => setEngine({ requireVerifiedPvLimits: v })} />

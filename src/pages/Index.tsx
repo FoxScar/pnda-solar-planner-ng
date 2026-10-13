@@ -114,10 +114,6 @@ const Index = () => {
       
       if (currentStep < steps.length) {
         setCurrentStep(currentStep + 1);
-        toast({
-          title: "Progress Saved",
-          description: `Step ${currentStep} completed successfully.`,
-        });
       }
     } catch (error) {
       console.error('Error in handleNext:', error);
@@ -169,14 +165,14 @@ const Index = () => {
         <div className="container mx-auto px-4 py-6">
           {/* Header */}
           <div className="mb-6">
-            <div className="flex items-center justify-between mb-4">
-              <h1 className="text-xl font-bold text-gray-900">P'NDA SOLAR</h1>
+            <div className="flex items-center justify-between gap-2 mb-4">
+              <h1 className="text-xl font-bold text-gray-900 whitespace-nowrap">P'NDA SOLAR</h1>
               {user && (
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-600">Welcome, {user.email}</span>
-                  <Button variant="outline" size="sm" onClick={handleSignOut}>
-                    <LogOut className="w-4 h-4 mr-1" />
-                    Sign Out
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-sm text-gray-600 hidden md:inline truncate">{user.email}</span>
+                  <Button variant="outline" onClick={handleSignOut} className="h-11 px-3" aria-label="Sign out">
+                    <LogOut className="w-4 h-4 sm:mr-1" />
+                    <span className="hidden sm:inline">Sign Out</span>
                   </Button>
                 </div>
               )}
@@ -307,23 +303,23 @@ const Index = () => {
       <div className="container mx-auto px-4 py-6">
         {/* Header with Progress */}
         <div className="mb-6">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
+          <div className="flex items-center justify-between gap-2 mb-1">
             <h1 className="text-xl font-bold text-gray-900">P'NDA SOLAR</h1>
-            <div className="flex items-center justify-between sm:gap-4">
-              <div className="text-sm text-gray-600">
-                Step {currentStep} of {totalSteps}
+            {user && (
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-600 hidden md:inline">{user.email}</span>
+                <Button variant="outline" onClick={() => setShowSavedQuotes(true)} className="h-11 px-3" aria-label="My quotes">
+                  <FileText className="w-4 h-4 sm:mr-1" />
+                  <span className="hidden sm:inline">My Quotes</span>
+                </Button>
+                <Button variant="outline" onClick={handleSignOut} className="h-11 px-3" aria-label="Sign out">
+                  <LogOut className="w-4 h-4 sm:mr-1" />
+                  <span className="hidden sm:inline">Sign Out</span>
+                </Button>
               </div>
-              {user && (
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-600 hidden sm:inline">Welcome, {user.email}</span>
-                  <Button variant="outline" size="sm" onClick={handleSignOut}>
-                    <LogOut className="w-4 h-4 sm:mr-1" />
-                    <span className="hidden sm:inline">Sign Out</span>
-                  </Button>
-                </div>
-              )}
-            </div>
+            )}
           </div>
+          <p className="text-sm text-gray-600 mb-3">Step {currentStep} of {totalSteps}</p>
           
           <div className="space-y-2">
             <Progress value={progress} className="h-2" />

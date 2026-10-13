@@ -74,8 +74,8 @@ const ApplianceManager = () => {
   const visible = items.filter((a) => `${a.name} ${a.category}`.toLowerCase().includes(search.toLowerCase()));
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
+    <Card className="border-0 shadow-none sm:border sm:shadow-sm">
+      <CardHeader className="px-0 sm:px-6 flex flex-row flex-wrap items-center justify-between gap-2">
         <CardTitle>Appliance Catalogue ({items.length})</CardTitle>
         <div className="flex gap-2">
           <Input placeholder="Search…" value={search} onChange={(e) => setSearch(e.target.value)} className="w-40" />
@@ -85,7 +85,7 @@ const ApplianceManager = () => {
           </Button>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="px-0 sm:px-6 space-y-4">
         <p className="text-sm text-gray-600">
           Wattage and surge factors are used by the sizing engine only and are never shown to customers.
           Surge factor guide: AC 3.0, pumps 2.5, fridges/freezers 2.0, other motors 2.0, everything else 1.0.
@@ -106,7 +106,41 @@ const ApplianceManager = () => {
         {loading ? (
           <p className="text-gray-600">Loading…</p>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <ul className="space-y-3 md:hidden">
+            {visible.map((a) => {
+              const d = draftFor(a);
+              const dirty = d.watts !== a.watts || d.surgeFactor !== a.surgeFactor;
+              return (
+                <li key={a.id} className="rounded-lg border bg-white p-3 space-y-3">
+                  <div>
+                    <p className="font-medium">{a.name}</p>
+                    <p className="text-sm text-gray-600">{a.category}</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label htmlFor={`m-watts-${a.id}`} className="text-xs">Running watts</Label>
+                      <Input id={`m-watts-${a.id}`} type="number" inputMode="numeric" min="1" className="h-11" value={d.watts} onChange={(e) => setDraft(a, "watts", Number(e.target.value))} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor={`m-surge-${a.id}`} className="text-xs">Surge ×</Label>
+                      <Input id={`m-surge-${a.id}`} type="number" inputMode="decimal" step="0.1" min="1" className="h-11" value={d.surgeFactor} onChange={(e) => setDraft(a, "surgeFactor", Number(e.target.value))} />
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <label className="flex min-h-11 items-center gap-3 text-sm">
+                      <Switch checked={a.isAirConditioner} onCheckedChange={(v) => patch(a.id, { isAirConditioner: v }, `${a.name} updated`)} /> Air conditioner
+                    </label>
+                    <label className="flex min-h-11 items-center gap-3 text-sm">
+                      <Switch checked={a.isActive} onCheckedChange={(v) => patch(a.id, { isActive: v }, `${a.name} ${v ? "shown" : "hidden"}`)} /> Shown
+                    </label>
+                  </div>
+                  {dirty && <Button className="h-11 w-full" onClick={() => patch(a.id, d, `${a.name} updated`)}>Save changes</Button>}
+                </li>
+              );
+            })}
+          </ul>
+          <div className="hidden md:block overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -150,6 +184,7 @@ const ApplianceManager = () => {
               </TableBody>
             </Table>
           </div>
+          </>
         )}
       </CardContent>
     </Card>

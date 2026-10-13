@@ -235,20 +235,28 @@ describe("POST /api/v1/calculate", () => {
     expect(bad.body?.error.field).toBe("panelId");
   });
 
-  it("rate-limits to 10 calculations per minute per client", async () => {
-    const headers = guest();
+  it("rate-limits signed-in users to 10/min and guests to 60/min per IP", async () => {
     const body = await ref001Body();
-    const statuses: number[] = [];
+    const { cookie } = await h.signUp();
+    const userStatuses: number[] = [];
     for (let i = 0; i < 11; i++) {
-      statuses.push((await h.request("/api/v1/calculate", { method: "POST", headers, json: body })).status);
+      userStatuses.push((await h.request("/api/v1/calculate", { method: "POST", cookie, headers: guest(), json: body })).status);
     }
-    expect(statuses.slice(0, 10)).toEqual(Array(10).fill(200));
-    expect(statuses[10]).toBe(429);
+    expect(userStatuses.slice(0, 10)).toEqual(Array(10).fill(200));
+    expect(userStatuses[10]).toBe(429);
+
+    // Guests sharing one IP get a larger allowance; check the boundary via the counter.
+    const headers = guest();
+    expect((await h.request("/api/v1/calculate", { method: "POST", headers, json: body })).status).toBe(200);
+    const ip = headers["x-forwarded-for"];
+    await h.db.update(rateLimits).set({ count: 60 }).where(eq(rateLimits.key, `calculate:ip:${ip}`));
+    expect((await h.request("/api/v1/calculate", { method: "POST", headers, json: body })).status).toBe(429);
 
     // The window resets after a minute.
     await h.db.update(rateLimits).set({ windowStart: new Date(Date.now() - 61_000) });
     expect((await h.request("/api/v1/calculate", { method: "POST", headers, json: body })).status).toBe(200);
   });
+
 });
 
 describe("POST /api/v1/validate-config", () => {

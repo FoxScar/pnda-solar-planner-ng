@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { NativeSelect } from "@/components/ui/native-select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Save, SlidersHorizontal, X } from "lucide-react";
 import ComponentSpecEditor from "./ComponentSpecEditor";
@@ -117,38 +117,23 @@ const ComponentManager = () => {
   const visible = filter === "all" ? items : items.filter((c) => c.type === filter);
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
+    <Card className="border-0 shadow-none sm:border sm:shadow-sm">
+      <CardHeader className="px-0 sm:px-6 flex flex-row flex-wrap items-center justify-between gap-2">
         <CardTitle>Component Inventory</CardTitle>
         <div className="flex gap-2">
-          <Select value={filter} onValueChange={(v) => setFilter(v as ComponentType | "all")}>
-            <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All types</SelectItem>
-              <SelectItem value="inverter">Inverters</SelectItem>
-              <SelectItem value="battery">Batteries</SelectItem>
-              <SelectItem value="panel">Panels</SelectItem>
-            </SelectContent>
-          </Select>
+          <NativeSelect value={filter} onValueChange={(v) => setFilter(v as ComponentType | "all")} className="w-36" options={[{ value: "all", label: "All types" }, { value: "inverter", label: "Inverters" }, { value: "battery", label: "Batteries" }, { value: "panel", label: "Panels" }]} />
           <Button onClick={() => setShowForm((s) => !s)} className="flex items-center gap-2">
             {showForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
             {showForm ? "Cancel" : "Add"}
           </Button>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="px-0 sm:px-6 space-y-4">
         {showForm && (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 border rounded-lg bg-gray-50">
             <div>
               <Label>Type</Label>
-              <Select value={form.type} onValueChange={(v) => set("type", v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="inverter">Inverter</SelectItem>
-                  <SelectItem value="battery">Battery</SelectItem>
-                  <SelectItem value="panel">Panel</SelectItem>
-                </SelectContent>
-              </Select>
+              <NativeSelect value={form.type} onValueChange={(v) => set("type", v)} options={[{ value: "inverter", label: "Inverter" }, { value: "battery", label: "Battery" }, { value: "panel", label: "Panel" }]} />
             </div>
             <div><Label>SKU</Label><Input value={form.sku} onChange={(e) => set("sku", e.target.value)} placeholder="INV-FEL-5K-48" /></div>
             <div><Label>Brand</Label><Input value={form.brand} onChange={(e) => set("brand", e.target.value)} /></div>
@@ -159,10 +144,7 @@ const ComponentManager = () => {
                 <div><Label>kVA (max 12)</Label><Input type="number" step="0.1" max="12" value={form.kva} onChange={(e) => set("kva", e.target.value)} /></div>
                 <div>
                   <Label>DC voltage</Label>
-                  <Select value={form.dcVoltage} onValueChange={(v) => set("dcVoltage", v)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent><SelectItem value="24">24V</SelectItem><SelectItem value="48">48V</SelectItem></SelectContent>
-                  </Select>
+                  <NativeSelect value={form.dcVoltage} onValueChange={(v) => set("dcVoltage", v)} options={[{ value: "24", label: "24V" }, { value: "48", label: "48V" }]} />
                 </div>
               </>
             )}
@@ -170,23 +152,11 @@ const ComponentManager = () => {
               <>
                 <div>
                   <Label>Chemistry</Label>
-                  <Select value={form.chemistry} onValueChange={(v) => set("chemistry", v)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="lithium">Lithium (LiFePO4)</SelectItem>
-                      <SelectItem value="gel">Gel lead-acid</SelectItem>
-                      <SelectItem value="tubular">Tubular lead-acid</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <NativeSelect value={form.chemistry} onValueChange={(v) => set("chemistry", v)} options={[{ value: "lithium", label: "Lithium (LiFePO4)" }, { value: "gel", label: "Gel lead-acid" }, { value: "tubular", label: "Tubular lead-acid" }]} />
                 </div>
                 <div>
                   <Label>Nominal voltage</Label>
-                  <Select value={form.dcVoltage} onValueChange={(v) => set("dcVoltage", v)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="12">12V</SelectItem><SelectItem value="24">24V</SelectItem><SelectItem value="48">48V</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <NativeSelect value={form.dcVoltage} onValueChange={(v) => set("dcVoltage", v)} options={[{ value: "12", label: "12V" }, { value: "24", label: "24V" }, { value: "48", label: "48V" }]} />
                 </div>
                 <div><Label>Capacity (kWh)</Label><Input type="number" step="0.01" value={form.capacityKwh} onChange={(e) => set("capacityKwh", e.target.value)} /></div>
                 <div><Label>Capacity (Ah, optional)</Label><Input type="number" value={form.capacityAh} onChange={(e) => set("capacityAh", e.target.value)} /></div>
@@ -204,7 +174,58 @@ const ComponentManager = () => {
         {loading ? (
           <p className="text-gray-600">Loading…</p>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          {/* Phones: one card per product so price, stock and specs are all visible without side-scrolling. */}
+          <ul className="space-y-3 md:hidden">
+            {visible.map((c) => {
+              const priceDirty = priceDrafts[c.id] !== undefined && Number(priceDrafts[c.id]) !== c.unitPriceNgn;
+              return (
+                <li key={c.id} className="rounded-lg border bg-white p-3 space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-medium">{c.model}</p>
+                      <p className="font-mono text-xs text-gray-500">{c.sku}</p>
+                      <p className="text-sm text-gray-600 capitalize">{specLabel(c)}</p>
+                    </div>
+                    <Badge variant="outline" className="shrink-0 capitalize">{c.type}</Badge>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-600">₦</span>
+                    <Input
+                      type="number"
+                      inputMode="numeric"
+                      min="1"
+                      className="h-11 flex-1"
+                      aria-label={`Price for ${c.model}`}
+                      value={priceDrafts[c.id] ?? String(c.unitPriceNgn)}
+                      onChange={(e) => setPriceDrafts((d) => ({ ...d, [c.id]: e.target.value }))}
+                    />
+                    {priceDirty && <Button className="h-11" onClick={() => savePrice(c)}>Save</Button>}
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <label className="flex min-h-11 items-center gap-3 text-sm">
+                      <Switch
+                        checked={c.isActive}
+                        onCheckedChange={(checked) => patch(c.id, { isActive: checked }, `${c.model} ${checked ? "activated" : "marked out of stock"}`)}
+                      />
+                      {c.isActive ? "In stock" : "Out of stock"}
+                    </label>
+                    <Button variant="outline" className="h-11" onClick={() => setSpecsFor((id) => (id === c.id ? null : c.id))} aria-expanded={specsFor === c.id}>
+                      <SlidersHorizontal className="mr-2 h-4 w-4" /> Specs
+                    </Button>
+                  </div>
+                  {specsFor === c.id && (
+                    <ComponentSpecEditor
+                      type={c.type}
+                      values={c as unknown as Record<string, number | null>}
+                      onSave={(specPatch) => patch(c.id, specPatch as Partial<Component>, `${c.model} specs updated`)}
+                    />
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+          <div className="hidden md:block overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -277,6 +298,7 @@ const ComponentManager = () => {
               </TableBody>
             </Table>
           </div>
+          </>
         )}
       </CardContent>
     </Card>

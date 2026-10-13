@@ -27,7 +27,7 @@ const QuoteSummary = ({ quote }: { quote: QuoteView }) => {
             {quote.preparedBy ? ` · Prepared by ${quote.preparedBy}` : ''}
           </p>
         </div>
-        <div className="text-right text-sm text-gray-600">
+        <div className="text-sm text-gray-600 sm:text-right">
           <p>Issued {formatDate(quote.createdAt)}</p>
           <p>Valid until {formatDate(quote.expiresAt)}</p>
           {quote.status === 'expired' && <Badge variant="destructive" className="mt-1">Expired</Badge>}

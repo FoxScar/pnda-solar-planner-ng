@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { NativeSelect } from "@/components/ui/native-select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { ROLES, type Role } from "../../../shared/domain";
@@ -39,15 +39,36 @@ const UserManager = () => {
   };
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className="border-0 shadow-none sm:border sm:shadow-sm">
+      <CardHeader className="px-0 sm:px-6">
         <CardTitle>Users ({rows.length})</CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="px-0 sm:px-6">
         {loading ? (
           <p className="text-gray-600">Loading…</p>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <ul className="space-y-3 md:hidden">
+            {rows.map((r) => (
+              <li key={r.id} className="rounded-lg border bg-white p-3 space-y-2">
+                <p className="font-medium break-all">{r.email}</p>
+                <p className="text-sm text-gray-600">
+                  {r.companyName ? `${r.companyName} · ` : ""}Joined {new Date(r.createdAt).toLocaleDateString("en-NG")} · <span className="capitalize">{r.status ?? "active"}</span>
+                </p>
+                {r.id === me?.id ? (
+                  <p className="text-sm capitalize">{r.role} (you)</p>
+                ) : (
+                  <NativeSelect
+                    value={r.role ?? "consumer"}
+                    onValueChange={(v) => changeRole(r, v as Role)}
+                    aria-label={`Role for ${r.email}`}
+                    options={ROLES.map((role) => ({ value: role, label: role[0]!.toUpperCase() + role.slice(1) }))}
+                  />
+                )}
+              </li>
+            ))}
+          </ul>
+          <div className="hidden md:block overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -67,12 +88,13 @@ const UserManager = () => {
                       {r.id === me?.id ? (
                         <span className="capitalize">{r.role} (you)</span>
                       ) : (
-                        <Select value={r.role ?? "consumer"} onValueChange={(v) => changeRole(r, v as Role)}>
-                          <SelectTrigger className="w-36 capitalize" aria-label={`Role for ${r.email}`}><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            {ROLES.map((role) => <SelectItem key={role} value={role} className="capitalize">{role}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
+                        <NativeSelect
+                          value={r.role ?? "consumer"}
+                          onValueChange={(v) => changeRole(r, v as Role)}
+                          className="w-36 capitalize"
+                          aria-label={`Role for ${r.email}`}
+                          options={ROLES.map((role) => ({ value: role, label: role[0]!.toUpperCase() + role.slice(1) }))}
+                        />
                       )}
                     </TableCell>
                   </TableRow>
@@ -80,6 +102,7 @@ const UserManager = () => {
               </TableBody>
             </Table>
           </div>
+          </>
         )}
       </CardContent>
     </Card>

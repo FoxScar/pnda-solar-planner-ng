@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Save } from "lucide-react";
@@ -49,11 +50,11 @@ const SunHoursManager = () => {
   };
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className="border-0 shadow-none sm:border sm:shadow-sm">
+      <CardHeader className="px-0 sm:px-6">
         <CardTitle>Peak Sun Hours by State</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="px-0 sm:px-6 space-y-4">
         <p className="text-sm text-gray-600">
           Systems are sized on the <strong>wet-season</strong> value so they work all year.
           Values must satisfy wet ≤ annual ≤ dry. States without a record fall back to 4.5 hours.
@@ -61,7 +62,36 @@ const SunHoursManager = () => {
         {loading ? (
           <p className="text-gray-600">Loading…</p>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <ul className="space-y-3 md:hidden">
+            {rows.map((r) => {
+              const v = valuesFor(r);
+              const dirty = FIELDS.some((f) => v[f.key] !== r[f.key]);
+              return (
+                <li key={r.state} className="rounded-lg border bg-white p-3 space-y-3">
+                  <p className="font-medium">{r.state} <span className="text-sm font-normal text-gray-600">· {r.region}</span></p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {FIELDS.map((f) => (
+                      <div key={f.key} className="space-y-1">
+                        <Label htmlFor={`m-${r.state}-${f.key}`} className="text-xs">{f.label}</Label>
+                        <Input
+                          id={`m-${r.state}-${f.key}`}
+                          type="number"
+                          inputMode="decimal"
+                          step="0.1"
+                          className="h-11"
+                          value={v[f.key]}
+                          onChange={(e) => setDrafts((d) => ({ ...d, [r.state]: { ...v, [f.key]: Number(e.target.value) } }))}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  {dirty && <Button className="h-11 w-full" onClick={() => save(r)}>Save {r.state}</Button>}
+                </li>
+              );
+            })}
+          </ul>
+          <div className="hidden md:block overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -102,6 +132,7 @@ const SunHoursManager = () => {
               </TableBody>
             </Table>
           </div>
+          </>
         )}
       </CardContent>
     </Card>
