@@ -16,22 +16,41 @@ These decisions supersede the corresponding sections of `PandaSolution_PRD_v1.0.
 
 No Supabase or Appwrite dependency remains.
 
-## Engineering rules (supersedes parts of §13, §14.2, §17, §33.2)
+## Engineering rules — Developer Calculation Schematics (October 2026)
 
-1. **Battery recharge energy for panel sizing** is the energy actually drawn overnight, not the
-   battery bank's nameplate capacity:
-   `rechargeEnergy = nightEnergy ÷ inverter_eff ÷ battery_rte`.
-   Using nameplate capacity (already divided by DoD) oversized lead-acid arrays ~2× and lithium ~1.25×.
-2. **Sun hours: always size on the wet-season value** for the user's state, so the system works all
-   year. The dry-season figure is shown for information only. (Replaces month-based season detection.)
-3. **AC loads require lithium** whenever any air conditioner is selected, regardless of inverter size
-   (FR-019 wins over the >4kVA wording in §13.2/§15.1). Engineers may override with justification.
+The owner's *Developer Calculation Schematics* replace the sizing rules of PRD v1.0 §13–17 and the
+v1.1 rules agreed earlier. Engine version **2.0.0**. Implemented as follows:
 
-4. **Inverter sizing uses the larger of the day and night surge-adjusted peaks** (supersedes FR-012's
-   "daytime peak only"). The inverter powers night loads too; with ACs used only at night the
-   day-only rule selects an inverter that cannot start them.
-5. **Reference designs** are redefined with pinned inputs in [`reference-designs.md`](reference-designs.md)
-   (supersedes §37.4, whose inputs were incomplete and whose outputs did not follow from §14).
+| Schematics | Implementation |
+|---|---|
+| §1 Night 17:00–06:00 (13 h); runtime ≤ window | Configurable night start/end; day ≤ 11 h and night ≤ 13 h enforced in UI and API |
+| §1 Peak = simultaneous loads; conservative overlap | All-overlap per period; peak = max(day, night) |
+| §2 VA = peak ÷ PF (0.8); reject insufficient continuous/surge; smallest valid model | Continuous and surge checked per product (defaults when not on datasheet, flagged); the smallest inverter that also yields a valid bank and PV array is chosen |
+| §2 Parallel inverters only where defined | Not offered; loads above 12kVA return OVERSIZE_REQUIRED |
+| §3 night × (1 + 30%) ÷ (DoD × inverter eff × discharge eff) | Exactly; DoD/efficiency from the product, else chemistry defaults |
+| §3 Validate discharge power; no mixing | Units added if the bank's discharge rating is too low; one SKU per bank |
+| §4 Effective W = rated × product performance factor | Per-panel `performance_factor` (existing panels backfilled to 0.80) |
+| §4C Combined rule: peak + battery kWh × 1000 ÷ sun-hours | Exactly, using the installed bank's nominal kWh |
+| §4D Daily-energy check | If the combined rule fails it, the count is raised to the smallest passing count ("next valid configuration") |
+| §5 PV input (power, voltage, current) | Checked when the inverter and panel datasheet values are on record; otherwise reported as unverified |
+| §5 Validation report; no quote for invalid systems | Seven checks returned with every calculation; saving a quote requires `quoteEligible` |
+| §6 Subtotal + installation fee (rate) + other fees − discounts | Exactly; installation rate configurable (default 15%) |
+| §7 No silent hard-coding | All parameters in admin → Settings, changes audited, recorded with each calculation |
+
+**Superseded earlier rules:** recharge-from-energy-drawn (now full nominal bank ÷ sun-hours), 10%
+safety margin (now 30%), inverter sizing on surge-adjusted peak ÷ 0.8 (now VA from running peak plus a
+separate surge check), fixed 0.72 panel derating (now per-product factor).
+
+**Kept from earlier decisions:** wet-season sun hours (now a setting), lithium required for any AC load,
+12kVA single-inverter limit, fewest-units battery selection.
+
+**Owner decisions needed**
+- **VAT**: §6 has no VAT line; the PRD requires 7.5%. VAT stays on at 7.5% (admin can set 0).
+- **Installation rate**: §6 says "configured"; 15% (the original app's figure) is the default.
+- **Peak for the combined rule**: the pseudocode's `load.peakWatts` is taken as max(day, night),
+  consistent with the inverter and with the §8 example. Daytime-only peak would give fewer panels.
+- **PV limits**: §5/§7 say no quote until PV input is validated. Seed inverters have no PV specs yet,
+  so `requireVerifiedPvLimits` is **off** until they are entered; switch it on in Settings afterwards.
 
 ## Phase 1 implementation choices
 

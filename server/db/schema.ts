@@ -166,8 +166,23 @@ export const components = pgTable(
     capacityAh: doublePrecision("capacity_ah"),
     /** Inverters only: max PV array the built-in charge controller accepts (null = unknown). */
     maxPvInputW: integer("max_pv_input_w"),
+    /** Inverters only (null = use engine settings defaults). */
+    efficiency: doublePrecision("efficiency"),
+    continuousW: integer("continuous_w"),
+    surgeW: integer("surge_w"),
+    maxPvVoc: doublePrecision("max_pv_voc"),
+    maxPvIsc: doublePrecision("max_pv_isc"),
+    mpptCount: integer("mppt_count"),
+    /** Batteries only (null = chemistry defaults from engine settings). */
+    depthOfDischarge: doublePrecision("depth_of_discharge"),
+    dischargeEfficiency: doublePrecision("discharge_efficiency"),
+    maxDischargeW: integer("max_discharge_w"),
     /** Panels only. */
     wattsPeak: integer("watts_peak"),
+    /** Usable output relative to nameplate, losses included (schematics §4). */
+    performanceFactor: doublePrecision("performance_factor"),
+    voc: doublePrecision("voc"),
+    isc: doublePrecision("isc"),
     unitPriceNgn: bigint("unit_price_ngn", { mode: "number" }).notNull(),
     isActive: boolean("is_active").notNull().default(true),
     createdAt: createdAt(),
@@ -184,7 +199,14 @@ export const components = pgTable(
       "components_battery_fields",
       sql`${t.type} <> 'battery' OR (${t.chemistry} IS NOT NULL AND ${t.capacityKwh} > 0 AND ${t.dcVoltage} IN (12, 24, 48))`,
     ),
-    check("components_panel_fields", sql`${t.type} <> 'panel' OR ${t.wattsPeak} > 0`),
+    check(
+      "components_panel_fields",
+      sql`${t.type} <> 'panel' OR (${t.wattsPeak} > 0 AND ${t.performanceFactor} > 0 AND ${t.performanceFactor} <= 1)`,
+    ),
+    check(
+      "components_fractions",
+      sql`(${t.efficiency} IS NULL OR (${t.efficiency} > 0 AND ${t.efficiency} <= 1)) AND (${t.depthOfDischarge} IS NULL OR (${t.depthOfDischarge} > 0 AND ${t.depthOfDischarge} <= 1)) AND (${t.dischargeEfficiency} IS NULL OR (${t.dischargeEfficiency} > 0 AND ${t.dischargeEfficiency} <= 1))`,
+    ),
   ],
 );
 
@@ -343,4 +365,11 @@ export const rateLimits = pgTable("rate_limits", {
   key: text("key").primaryKey(),
   windowStart: timestamp("window_start", { withTimezone: true }).notNull(),
   count: integer("count").notNull(),
+});
+
+/** Admin-configurable engine and pricing parameters (validated by shared/settings.ts). */
+export const settings = pgTable("settings", {
+  key: text("key").primaryKey(),
+  value: jsonb("value").notNull(),
+  updatedAt: updatedAt(),
 });

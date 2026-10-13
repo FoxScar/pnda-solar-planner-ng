@@ -86,11 +86,21 @@ const QuoteSummary = ({ quote }: { quote: QuoteView }) => {
                 </TableBody>
                 <TableFooter>
                   <TableRow><TableCell colSpan={2}>Equipment</TableCell><TableCell className="text-right">{formatPrice(pricing.equipmentSubtotalNgn)}</TableCell></TableRow>
-                  <TableRow>
-                    <TableCell colSpan={2}>Labour</TableCell>
-                    <TableCell className="text-right">{pricing.labourNgn > 0 ? formatPrice(pricing.labourNgn) : 'By installer'}</TableCell>
-                  </TableRow>
-                  <TableRow><TableCell colSpan={2}>VAT ({pricing.vatRate * 100}%)</TableCell><TableCell className="text-right">{formatPrice(pricing.vatNgn)}</TableCell></TableRow>
+                  {pricing.installationFeeNgn > 0 && (
+                    <TableRow>
+                      <TableCell colSpan={2}>Installation ({Number((pricing.installationRate * 100).toFixed(2))}%)</TableCell>
+                      <TableCell className="text-right">{formatPrice(pricing.installationFeeNgn)}</TableCell>
+                    </TableRow>
+                  )}
+                  {pricing.labourNgn > 0 && (
+                    <TableRow><TableCell colSpan={2}>Other fees</TableCell><TableCell className="text-right">{formatPrice(pricing.labourNgn)}</TableCell></TableRow>
+                  )}
+                  {pricing.discountNgn > 0 && (
+                    <TableRow><TableCell colSpan={2}>Discount</TableCell><TableCell className="text-right">−{formatPrice(pricing.discountNgn)}</TableCell></TableRow>
+                  )}
+                  {pricing.vatRate > 0 && (
+                    <TableRow><TableCell colSpan={2}>VAT ({Number((pricing.vatRate * 100).toFixed(2))}%)</TableCell><TableCell className="text-right">{formatPrice(pricing.vatNgn)}</TableCell></TableRow>
+                  )}
                   <TableRow><TableCell colSpan={2} className="font-bold">Total</TableCell><TableCell className="text-right font-bold">{formatPrice(pricing.totalNgn)}</TableCell></TableRow>
                 </TableFooter>
               </Table>

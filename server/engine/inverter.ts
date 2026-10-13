@@ -1,55 +1,52 @@
-import { INVERTER_DERATING, MAX_INVERTER_KVA } from "./constants";
+import type { EngineSettings } from "../../shared/settings";
+import { MAX_INVERTER_KVA } from "./constants";
 import { EngineError } from "./errors";
-import type { InverterSelection, InverterSku } from "./types";
+import type { InverterSelection, InverterSku, LoadProfile } from "./types";
+
+/** Product ratings, falling back to settings defaults where the record has none. */
+export function inverterRatings(inv: InverterSku, settings: EngineSettings) {
+  const continuousW = inv.continuousW ?? inv.kva * 1000 * settings.powerFactor;
+  const surgeW = inv.surgeW ?? continuousW * settings.defaultInverterSurgeMultiplier;
+  return {
+    continuousW,
+    surgeW,
+    efficiency: inv.efficiency ?? settings.defaultInverterEfficiency,
+    specsAssumed: inv.continuousW === null || inv.surgeW === null,
+  };
+}
 
 /**
- * Smallest active inverter whose derated rating covers the design peak and
- * whose charge controller (when its limit is known) accepts the PV array.
+ * Schematics §2: required VA = peak watts ÷ power factor. Returns every in-stock
+ * inverter that meets the VA, continuous real-power and surge requirements,
+ * smallest first. The caller picks the first one that also yields a valid
+ * battery bank and PV array.
  */
-export function selectInverter(
-  designPeakKw: number,
-  arrayWatts: number,
-  inverters: InverterSku[],
-): InverterSelection & { pvInputUnverified: boolean } {
-  const requiredKvaForLoad = designPeakKw / INVERTER_DERATING;
+export function qualifyingInverters(load: LoadProfile, inverters: InverterSku[], settings: EngineSettings): InverterSelection[] {
+  const requiredVa = load.peakW / settings.powerFactor;
 
-  if (requiredKvaForLoad > MAX_INVERTER_KVA) {
+  if (requiredVa > MAX_INVERTER_KVA * 1000) {
     throw new EngineError(
       "OVERSIZE_REQUIRED",
-      `This load needs about ${requiredKvaForLoad.toFixed(1)}kVA, which is above the ${MAX_INVERTER_KVA}kVA single-inverter limit. ` +
+      `This load needs about ${(requiredVa / 1000).toFixed(1)}kVA, which is above the ${MAX_INVERTER_KVA}kVA single-inverter limit. ` +
         "It needs a multi-inverter (phase-split) design by an engineer, or fewer appliances running at the same time.",
       "appliances",
-      { requiredKva: requiredKvaForLoad, maxKva: MAX_INVERTER_KVA },
+      { requiredVa, maxKva: MAX_INVERTER_KVA },
     );
   }
 
-  const bigEnough = inverters
-    .filter((inv) => inv.kva >= requiredKvaForLoad)
-    .sort((a, b) => a.kva - b.kva || a.unitPriceNgn - b.unitPriceNgn);
+  const qualifying = [...inverters]
+    .sort((a, b) => a.kva - b.kva || a.unitPriceNgn - b.unitPriceNgn)
+    .map((inverter) => ({ inverter, ...inverterRatings(inverter, settings) }))
+    .filter((c) => c.inverter.kva * 1000 >= requiredVa && c.continuousW >= load.peakW && c.surgeW >= load.surgeRequirementW)
+    .map((c) => ({ ...c, systemVoltage: c.inverter.dcVoltage, requiredVa }));
 
-  if (bigEnough.length === 0) {
+  if (qualifying.length === 0) {
     throw new EngineError(
       "NO_SKU_AVAILABLE",
-      `No inverter of at least ${requiredKvaForLoad.toFixed(1)}kVA is currently in stock.`,
+      `No inverter in stock can supply ${(requiredVa / 1000).toFixed(1)}kVA with a ${(load.surgeRequirementW / 1000).toFixed(1)}kW start-up surge.`,
       "inverter",
-      { requiredKva: requiredKvaForLoad },
+      { requiredVa, peakW: load.peakW, surgeRequirementW: load.surgeRequirementW },
     );
   }
-
-  const inverter = bigEnough.find((inv) => inv.maxPvInputW === null || inv.maxPvInputW >= arrayWatts);
-  if (!inverter) {
-    throw new EngineError(
-      "NO_SKU_AVAILABLE",
-      `The ${(arrayWatts / 1000).toFixed(1)}kWp solar array needed is larger than any in-stock inverter can accept.`,
-      "inverter",
-      { arrayWatts, requiredKva: requiredKvaForLoad },
-    );
-  }
-
-  return {
-    requiredKvaForLoad,
-    inverter,
-    systemVoltage: inverter.dcVoltage,
-    pvInputUnverified: inverter.maxPvInputW === null,
-  };
+  return qualifying;
 }

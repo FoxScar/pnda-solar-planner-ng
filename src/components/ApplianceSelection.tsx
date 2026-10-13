@@ -22,6 +22,18 @@ const ApplianceSelection = ({ onNext, onBack, data }) => {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
+  // Day/night windows come from the engine settings (default night 17:00–06:00).
+  const [windows, setWindows] = useState({ nightStart: '17:00', nightEnd: '06:00', dayHours: 11, nightHours: 13 });
+  useEffect(() => {
+    api<typeof windows>('/config').then(setWindows).catch(() => {});
+  }, []);
+  const fmtTime = (hhmm: string) => {
+    const [h, m] = hhmm.split(':').map(Number);
+    return `${h % 12 || 12}${m ? `:${String(m).padStart(2, '0')}` : ''} ${h < 12 ? 'AM' : 'PM'}`;
+  };
+  const dayLabel = `${fmtTime(windows.nightEnd)}–${fmtTime(windows.nightStart)}`;
+  const nightLabel = `${fmtTime(windows.nightStart)}–${fmtTime(windows.nightEnd)}`;
+
   useEffect(() => {
     fetchAppliances();
   }, []);
@@ -70,18 +82,17 @@ const ApplianceSelection = ({ onNext, onBack, data }) => {
       
       const updated = { ...app, [field]: value };
       
-      // Validate day + night hours don't exceed 24
-      if (field === 'dayHours' || field === 'nightHours') {
-        const totalHours = (field === 'dayHours' ? value : updated.dayHours) + 
-                          (field === 'nightHours' ? value : updated.nightHours);
-        if (totalHours > 24) {
-          toast({
-            title: "Invalid hours",
-            description: "Day + Night hours cannot exceed 24 hours.",
-            variant: "destructive"
-          });
-          return app; // Don't update
-        }
+      // Runtime must fit inside its window (schematics §1); the server enforces the same limits.
+      const limit = field === 'dayHours' ? windows.dayHours : field === 'nightHours' ? windows.nightHours : null;
+      if (limit !== null && value > limit) {
+        toast({
+          title: "Invalid hours",
+          description: field === 'dayHours'
+            ? `Daytime (${dayLabel}) is ${limit} hours long.`
+            : `Night-time (${nightLabel}) is ${limit} hours long.`,
+          variant: "destructive"
+        });
+        return app; // Don't update
       }
       
       // Validate quantity is at least 1
@@ -264,13 +275,13 @@ const ApplianceSelection = ({ onNext, onBack, data }) => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor={`dayHours-${appliance.id}`} className="flex items-center gap-1">
-                      Day Hours (7am-6pm)
+                      Day Hours ({dayLabel})
                       <Tooltip>
                         <TooltipTrigger>
                           <Info className="w-3 h-3 text-gray-400" />
                         </TooltipTrigger>
                         <TooltipContent>
-                          <p>Hours this appliance runs during daytime (7am-6pm)</p>
+                          <p>Hours this appliance actually runs between {dayLabel} (max {windows.dayHours})</p>
                         </TooltipContent>
                       </Tooltip>
                     </Label>
@@ -278,7 +289,7 @@ const ApplianceSelection = ({ onNext, onBack, data }) => {
                       id={`dayHours-${appliance.id}`}
                       type="number"
                       min="0"
-                      max="11"
+                      max={windows.dayHours}
                       step="0.5"
                       value={appliance.dayHours || 0}
                       onChange={(e) => updateAppliance(appliance.id, 'dayHours', parseFloat(e.target.value) || 0)}
@@ -287,13 +298,13 @@ const ApplianceSelection = ({ onNext, onBack, data }) => {
 
                   <div>
                     <Label htmlFor={`nightHours-${appliance.id}`} className="flex items-center gap-1">
-                      Night Hours (6pm-7am)
+                      Night Hours ({nightLabel})
                       <Tooltip>
                         <TooltipTrigger>
                           <Info className="w-3 h-3 text-gray-400" />
                         </TooltipTrigger>
                         <TooltipContent>
-                          <p>Hours this appliance runs during nighttime (6pm-7am)</p>
+                          <p>Hours this appliance actually runs between {nightLabel} (max {windows.nightHours})</p>
                         </TooltipContent>
                       </Tooltip>
                     </Label>
@@ -301,7 +312,7 @@ const ApplianceSelection = ({ onNext, onBack, data }) => {
                       id={`nightHours-${appliance.id}`}
                       type="number"
                       min="0"
-                      max="13"
+                      max={windows.nightHours}
                       step="0.5"
                       value={appliance.nightHours || 0}
                       onChange={(e) => updateAppliance(appliance.id, 'nightHours', parseFloat(e.target.value) || 0)}

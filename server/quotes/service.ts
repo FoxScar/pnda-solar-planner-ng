@@ -10,6 +10,7 @@ import type { Db } from "../db/client";
 import { adEvents, components, installerMargins, quoteCalcAudit, quotes, userProfiles } from "../db/schema";
 import { ENGINE_VERSION, priceBom, type BomLine, type EngineResult, type LoadItem, type Pricing } from "../engine";
 import type { SessionUser } from "../lib/context";
+import { loadSettings } from "../lib/settings";
 import { ApiError } from "../lib/http";
 
 export type QuoteRow = typeof quotes.$inferSelect;
@@ -62,6 +63,14 @@ export async function createQuote(
   if ("error" in result) {
     throw new ApiError(400, "INVALID_PAYLOAD", "That calculation did not produce a system.", "calculationId");
   }
+  // Sizing rules changed between engine versions; never quote a design made under old rules.
+  if (calc.engineVersion !== ENGINE_VERSION) {
+    throw new ApiError(409, "INVALID_PAYLOAD", "Our sizing method has been updated. Please calculate your system again.", "calculationId");
+  }
+  // Schematics §5: no final quote for a system that has not passed validation.
+  if (!result.validation.quoteEligible) {
+    throw new ApiError(422, "INVALID_PAYLOAD", "This system has not passed validation, so a quote can't be issued.", "calculationId");
+  }
   const inputs = calc.inputs as StoredInputs;
 
   // Current prices; refuse if anything has gone out of stock since the calculation.
@@ -80,7 +89,12 @@ export async function createQuote(
   const [margins] = isInstaller
     ? await db.select().from(installerMargins).where(eq(installerMargins.installerId, user.id)).limit(1)
     : [];
-  const pricing = priceBom(bom, { marginPct: margins?.marginPct ?? 0, labourFlatFeeNgn: margins?.labourFlatFeeNgn ?? 0 });
+  const { pricing: pricingSettings } = await loadSettings(db);
+  const pricing = priceBom(bom, {
+    ...pricingSettings,
+    marginPct: margins?.marginPct ?? 0,
+    labourFlatFeeNgn: margins?.labourFlatFeeNgn ?? 0,
+  });
 
   const now = new Date();
   const values = {
@@ -192,7 +206,11 @@ export function quoteView(quote: QuoteRow, extras: { preparedBy: string | null; 
     pricing: {
       lines: pricing.lines,
       equipmentSubtotalNgn: pricing.equipmentSubtotalNgn,
+      // Quotes saved before installation fees existed have none.
+      installationRate: pricing.installationRate ?? 0,
+      installationFeeNgn: pricing.installationFeeNgn ?? 0,
       labourNgn: pricing.labourNgn,
+      discountNgn: pricing.discountNgn ?? 0,
       vatNgn: pricing.vatNgn,
       vatRate: pricing.vatRate,
       totalNgn: pricing.totalNgn,
@@ -216,6 +234,11 @@ export function systemView(r: EngineResult) {
       parallelStrings: r.battery.parallelStrings,
       installedKwh: r.battery.installedKwh,
     },
-    panels: { model: r.panels.panel.model, wattsPeak: r.panels.panel.wattsPeak, count: r.panels.count, arrayKwp: r.panels.arrayKwp },
+    panels: {
+      model: r.panels.panel.model,
+      wattsPeak: r.panels.panel.wattsPeak,
+      count: r.panels.count,
+      arrayKwp: (r.panels.count * r.panels.panel.wattsPeak) / 1000,
+    },
   };
 }

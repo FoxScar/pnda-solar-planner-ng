@@ -39,6 +39,7 @@ export const AUDIT_ACTIONS = [
   "APPLIANCE_UPDATE",
   "SUN_HOUR_UPDATE",
   "ROLE_CHANGE",
+  "SETTINGS_UPDATE",
   "ENGINEER_OVERRIDE",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

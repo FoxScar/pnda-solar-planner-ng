@@ -22,6 +22,13 @@
       "when": 1791757312038,
       "tag": "0002_engine_support",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791890583473,
+      "tag": "0003_calculation_schematics",
+      "breakpoints": true
     }
   ]
 }

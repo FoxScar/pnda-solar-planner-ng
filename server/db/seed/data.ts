@@ -98,7 +98,7 @@ export const BATTERIES = (
 
 export const PANELS = [
   { sku: "PNL-MONO-400", model: "400Wp Monocrystalline PERC", wattsPeak: 400, unitPriceNgn: 110_000 },
-].map((p) => ({ ...p, type: "panel" as const, brand: "Generic" }));
+].map((p) => ({ ...p, type: "panel" as const, brand: "Generic", performanceFactor: 0.8 }));
 
 // ---------------------------------------------------------------------------
 // Appliance catalogue (FR-001: 60+ Nigerian household and commercial items).

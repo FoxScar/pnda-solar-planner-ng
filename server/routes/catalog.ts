@@ -4,6 +4,8 @@ import { appliances, components, sunHours } from "../db/schema";
 import type { AppEnv } from "../lib/context";
 import { ok } from "../lib/http";
 import { requireRole } from "../lib/middleware";
+import { loadSettings } from "../lib/settings";
+import { periodWindows } from "../../shared/settings";
 
 export const catalogRoutes = new Hono<AppEnv>()
   /**
@@ -25,6 +27,12 @@ export const catalogRoutes = new Hono<AppEnv>()
       .from(sunHours)
       .orderBy(asc(sunHours.state));
     return ok(c, rows);
+  })
+
+  /** Day/night windows the wizard uses to label and limit appliance hours (schematics §1). */
+  .get("/config", async (c) => {
+    const { engine } = await loadSettings(c.var.db);
+    return ok(c, { nightStart: engine.nightStart, nightEnd: engine.nightEnd, ...periodWindows(engine) });
   })
 
   /** Active inventory for installers and admins (PRD §24.1). */

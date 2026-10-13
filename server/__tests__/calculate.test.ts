@@ -39,10 +39,12 @@ describe("POST /api/v1/calculate", () => {
       systemVoltage: 24,
       inverter: { kva: 1.8 },
       battery: { units: 2, installedKwh: 10 },
-      panels: { count: 8, wattsPeak: 400 },
+      panels: { count: 11, wattsPeak: 400 },
     });
     expect(data.bom.map((l: { sku: string }) => l.sku)).toEqual(["INV-FEL-1K8-24", "BAT-LI-24-5K", "PNL-MONO-400"]);
-    expect(data.pricing.totalNgn).toBe(data.pricing.equipmentSubtotalNgn + data.pricing.vatNgn);
+    expect(data.pricing.installationFeeNgn).toBe(Math.round(data.pricing.equipmentSubtotalNgn * 0.15));
+    expect(data.pricing.totalNgn).toBe(data.pricing.equipmentSubtotalNgn + data.pricing.installationFeeNgn + data.pricing.vatNgn);
+    expect(data.quoteEligible).toBe(true);
     expect(data.calculation).toBeUndefined();
     expect(JSON.stringify(data)).not.toMatch(/watts"|EnergyKwh|PeakKw/);
   });
@@ -95,7 +97,7 @@ describe("POST /api/v1/calculate", () => {
   it("returns OVERSIZE_REQUIRED above 12kVA", async () => {
     const body = {
       state: "Kano",
-      appliances: [{ applianceId: await applianceId("Air Conditioner (2HP)"), quantity: 4, dayHours: 0, nightHours: 8 }],
+      appliances: [{ applianceId: await applianceId("Air Conditioner (2HP)"), quantity: 6, dayHours: 0, nightHours: 8 }],
     };
     const res = await h.request("/api/v1/calculate", { method: "POST", headers: guest(), json: body });
     expect(res.status).toBe(422);
@@ -137,11 +139,20 @@ describe("POST /api/v1/calculate", () => {
     const res = await h.request("/api/v1/calculate", { method: "POST", headers: guest(), json: await ref001Body() });
     expect(res.body?.data.bom[1].unitPriceNgn).toBe(999_999);
 
+    // Without a 24V battery the smallest valid system moves to a 48V inverter (schematics §2).
     await h.db.update(components).set({ isActive: false }).where(eq(components.sku, "BAT-LI-24-5K"));
+    const moved = await h.request("/api/v1/calculate", { method: "POST", headers: guest(), json: await ref001Body() });
+    expect(moved.status).toBe(200);
+    expect(moved.body?.data.system.systemVoltage).toBe(48);
+    expect(moved.body?.data.bom.map((l: { sku: string }) => l.sku)).not.toContain("BAT-LI-24-5K");
+    await h.db.update(components).set({ isActive: true, unitPriceNgn: 850_000 }).where(eq(components.sku, "BAT-LI-24-5K"));
+
+    // With no panels in stock there is no valid system at all.
+    await h.db.update(components).set({ isActive: false }).where(eq(components.type, "panel"));
     const out = await h.request("/api/v1/calculate", { method: "POST", headers: guest(), json: await ref001Body() });
     expect(out.status).toBe(422);
     expect(out.body?.error.code).toBe("NO_SKU_AVAILABLE");
-    await h.db.update(components).set({ isActive: true, unitPriceNgn: 850_000 }).where(eq(components.sku, "BAT-LI-24-5K"));
+    await h.db.update(components).set({ isActive: true }).where(eq(components.type, "panel"));
   });
 
   it("falls back to 4.5 sun hours when a state's record is missing", async () => {
@@ -151,6 +162,51 @@ describe("POST /api/v1/calculate", () => {
     expect(res.status).toBe(200);
     expect(res.body?.data.warnings.map((w: { code: string }) => w.code)).toContain("SUN_HOURS_FALLBACK");
     await h.db.insert(sunHours).values(ekiti!);
+  });
+
+  it("limits runtime to the configured day (11h) and night (13h) windows", async () => {
+    const id = await applianceId("Ceiling Fan");
+    const config = await h.request("/api/v1/config");
+    expect(config.body?.data).toEqual({ nightStart: "17:00", nightEnd: "06:00", nightHours: 13, dayHours: 11 });
+    const day = await h.request("/api/v1/calculate", { method: "POST", headers: guest(), json: { state: "Lagos", appliances: [{ applianceId: id, quantity: 1, dayHours: 12, nightHours: 0 }] } });
+    expect(day.status).toBe(400);
+    expect(day.body?.error.field).toBe("appliances.0.dayHours");
+    const night = await h.request("/api/v1/calculate", { method: "POST", headers: guest(), json: { state: "Lagos", appliances: [{ applianceId: id, quantity: 1, dayHours: 0, nightHours: 13.5 }] } });
+    expect(night.body?.error.field).toBe("appliances.0.nightHours");
+    const ok = await h.request("/api/v1/calculate", { method: "POST", headers: guest(), json: { state: "Lagos", appliances: [{ applianceId: id, quantity: 1, dayHours: 11, nightHours: 13 }] } });
+    expect(ok.status).toBe(200);
+  });
+
+  it("uses admin-configured settings and records them with the calculation", async () => {
+    const admin = await h.signUp("admin");
+    const before = await h.request("/api/v1/calculate", { method: "POST", headers: guest(), json: await ref001Body() });
+    const patch = await h.request("/api/v1/admin/settings", { method: "PATCH", cookie: admin.cookie, json: { engine: { safetyMargin: 1.0 }, pricing: { installationRate: 0 } } });
+    expect(patch.status).toBe(200);
+    try {
+      const after = await h.request("/api/v1/calculate", { method: "POST", headers: guest(), json: await ref001Body() });
+      // 4.34 × 2.0 ÷ 0.684 = 12.69 kWh → 3 × 5 kWh instead of 2
+      expect(before.body?.data.system.battery.units).toBe(2);
+      expect(after.body?.data.system.battery.units).toBe(3);
+      expect(after.body?.data.pricing.installationFeeNgn).toBe(0);
+      const [row] = await h.db.select().from(quoteCalcAudit).where(eq(quoteCalcAudit.id, after.body?.data.calculationId));
+      expect((row?.inputs as { settings: { engine: { safetyMargin: number } } }).settings.engine.safetyMargin).toBe(1);
+      const [entry] = await h.db.select().from(auditLog).where(eq(auditLog.action, "SETTINGS_UPDATE"));
+      expect(entry?.actorId).toBe(admin.userId);
+    } finally {
+      await h.request("/api/v1/admin/settings", { method: "PATCH", cookie: admin.cookie, json: { engine: { safetyMargin: 0.3 }, pricing: { installationRate: 0.15 } } });
+    }
+  });
+
+  it("rejects invalid settings and non-admin changes", async () => {
+    const admin = await h.signUp("admin");
+    const bad = await h.request("/api/v1/admin/settings", { method: "PATCH", cookie: admin.cookie, json: { engine: { powerFactor: 1.5 } } });
+    expect(bad.status).toBe(400);
+    const unknown = await h.request("/api/v1/admin/settings", { method: "PATCH", cookie: admin.cookie, json: { engine: { madeUp: 1 } } });
+    expect(unknown.status).toBe(400);
+    const consumer = await h.signUp();
+    expect((await h.request("/api/v1/admin/settings", { method: "PATCH", cookie: consumer.cookie, json: { pricing: { vatRate: 0 } } })).status).toBe(403);
+    const read = await h.request("/api/v1/admin/settings", { cookie: admin.cookie });
+    expect(read.body?.data.engine.powerFactor).toBe(0.8);
   });
 
   it("rate-limits to 10 calculations per minute per client", async () => {

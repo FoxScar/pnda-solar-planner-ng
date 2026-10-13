@@ -1,7 +1,7 @@
 import { eq, sql } from "drizzle-orm";
 import { PDFDocument } from "pdf-lib";
 import { afterAll, describe, expect, it } from "vitest";
-import { adEvents, appliances, components, installerMargins, quotes, userProfiles } from "../db/schema";
+import { adEvents, appliances, components, installerMargins, quoteCalcAudit, quotes, userProfiles } from "../db/schema";
 import { createHarness } from "./harness";
 
 const h = createHarness();
@@ -96,6 +96,16 @@ describe("saving quotes", () => {
     expect(JSON.stringify(quote)).not.toMatch(/"watts"|EnergyKwh|PeakKw/);
   });
 
+  it("refuses calculations made under an older engine version", async () => {
+    const { cookie } = await h.signUp();
+    const { calculationId } = await calculate(cookie);
+    const [row] = await h.db.select().from(quoteCalcAudit).where(eq(quoteCalcAudit.id, calculationId));
+    const [old] = await h.db.insert(quoteCalcAudit).values({ userId: row!.userId, inputs: row!.inputs, stepResults: row!.stepResults, engineVersion: "1.0.0" }).returning();
+    const res = await h.request("/api/v1/quotes", { method: "POST", cookie, json: { calculationId: old!.id } });
+    expect(res.status).toBe(409);
+    expect(res.body?.error.message).toMatch(/calculate your system again/);
+  });
+
   it("will not save another user's calculation", async () => {
     const alice = await h.signUp();
     const { calculationId } = await calculate(alice.cookie);
@@ -129,7 +139,8 @@ describe("saving quotes", () => {
     const inverterBase = calc.bom[0]!.unitPriceNgn;
     expect(quote.pricing.lines[0].unitPriceNgn).toBe(Math.round(inverterBase * 1.1));
     expect(quote.pricing.labourNgn).toBe(150_000);
-    expect(quote.pricing.totalNgn).toBe(quote.pricing.equipmentSubtotalNgn + 150_000 + quote.pricing.vatNgn);
+    expect(quote.pricing.installationFeeNgn).toBe(Math.round(quote.pricing.equipmentSubtotalNgn * 0.15));
+    expect(quote.pricing.totalNgn).toBe(quote.pricing.equipmentSubtotalNgn + quote.pricing.installationFeeNgn + 150_000 + quote.pricing.vatNgn);
     expect(quote.preparedBy).toBe("Emeka Solar Ltd");
     expect(quote.pricing.marginNgn).toBeUndefined(); // margin is never exposed to clients
   });

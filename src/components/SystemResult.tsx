@@ -23,13 +23,13 @@ interface CalculationResponse {
     panels: { model: string; wattsPeak: number; count: number; arrayKwp: number };
   };
   bom: { sku: string; type: string; model: string; quantity: number; unitPriceNgn: number }[];
-  pricing: { equipmentSubtotalNgn: number; vatNgn: number; totalNgn: number; vatRate: number };
+  pricing: { equipmentSubtotalNgn: number; installationRate: number; installationFeeNgn: number; vatNgn: number; totalNgn: number; vatRate: number };
   warnings: { code: string; message: string }[];
   calculation?: unknown;
 }
 
 /** Warnings that only make sense to engineers reviewing the design. */
-const TECHNICAL_WARNINGS = new Set(['PV_INPUT_UNVERIFIED']);
+const TECHNICAL_WARNINGS = new Set(['PV_INPUT_UNVERIFIED', 'INVERTER_SPECS_ASSUMED']);
 
 const fmt = (n: number) => Number(n.toFixed(2)).toString();
 
@@ -171,10 +171,18 @@ const SystemResult = ({ onBack, data }) => {
                 <TableCell colSpan={2}>Equipment subtotal</TableCell>
                 <TableCell className="text-right">{formatPrice(pricing.equipmentSubtotalNgn)}</TableCell>
               </TableRow>
-              <TableRow>
-                <TableCell colSpan={2}>VAT ({pricing.vatRate * 100}%)</TableCell>
-                <TableCell className="text-right">{formatPrice(pricing.vatNgn)}</TableCell>
-              </TableRow>
+              {pricing.installationFeeNgn > 0 && (
+                <TableRow>
+                  <TableCell colSpan={2}>Installation ({Number((pricing.installationRate * 100).toFixed(2))}%)</TableCell>
+                  <TableCell className="text-right">{formatPrice(pricing.installationFeeNgn)}</TableCell>
+                </TableRow>
+              )}
+              {pricing.vatRate > 0 && (
+                <TableRow>
+                  <TableCell colSpan={2}>VAT ({Number((pricing.vatRate * 100).toFixed(2))}%)</TableCell>
+                  <TableCell className="text-right">{formatPrice(pricing.vatNgn)}</TableCell>
+                </TableRow>
+              )}
               <TableRow>
                 <TableCell colSpan={2} className="font-bold">Estimated total</TableCell>
                 <TableCell className="text-right font-bold">{formatPrice(pricing.totalNgn)}</TableCell>
@@ -183,7 +191,7 @@ const SystemResult = ({ onBack, data }) => {
           </Table>
         </div>
         <p className="text-xs text-gray-500">
-          Equipment prices only — installation labour is quoted by your installer. Accuracy depends on the appliances and hours you entered.
+          Estimate at current prices. Accuracy depends on the appliances and hours you entered.
         </p>
 
         <div className="rounded-lg border bg-orange-50/50 p-4 space-y-3">

@@ -8,6 +8,7 @@ import {
   NIGERIAN_STATES,
 } from "../../shared/domain";
 import type { Db } from "../db/client";
+import { periodWindows } from "../../shared/settings";
 import { appliances, auditLog, components, quoteCalcAudit, sunHours } from "../db/schema";
 import { CUSTOM_APPLIANCE_OUTLIER_WATTS } from "../engine/constants";
 import {
@@ -16,18 +17,17 @@ import {
   ENGINE_VERSION,
   EngineError,
   priceBom,
-  type BatterySku,
-  type Catalogue,
   type EngineResult,
   type EngineWarning,
-  type InverterSku,
   type LoadItem,
   type SunHoursInput,
 } from "../engine";
+import { loadCatalogue, toBattery, toInverter } from "../lib/catalogue";
 import type { AppEnv } from "../lib/context";
 import { ApiError, ok } from "../lib/http";
 import { requireAuth } from "../lib/middleware";
 import { consumeRateLimit, rateLimitKey } from "../lib/rate-limit";
+import { loadSettings } from "../lib/settings";
 import { validate } from "../lib/validate";
 import { systemView } from "../quotes/service";
 
@@ -105,34 +105,6 @@ async function resolveSunHours(db: Db, state: string): Promise<SunHoursInput> {
   return { wetSeason: h, drySeason: h, annualAvg: h, isFallback: true };
 }
 
-function toInverter(c: typeof components.$inferSelect): InverterSku {
-  return { id: c.id, sku: c.sku, model: c.model, kva: c.kva!, dcVoltage: c.dcVoltage!, unitPriceNgn: c.unitPriceNgn, maxPvInputW: c.maxPvInputW };
-}
-
-function toBattery(c: typeof components.$inferSelect): BatterySku {
-  return {
-    id: c.id,
-    sku: c.sku,
-    model: c.model,
-    chemistry: c.chemistry!,
-    dcVoltage: c.dcVoltage!,
-    capacityKwh: c.capacityKwh!,
-    capacityAh: c.capacityAh,
-    unitPriceNgn: c.unitPriceNgn,
-  };
-}
-
-async function loadCatalogue(db: Db): Promise<Catalogue> {
-  const rows = await db.select().from(components).where(eq(components.isActive, true));
-  return {
-    inverters: rows.filter((r) => r.type === "inverter").map(toInverter),
-    batteries: rows.filter((r) => r.type === "battery").map(toBattery),
-    panels: rows
-      .filter((r) => r.type === "panel")
-      .map((c) => ({ id: c.id, sku: c.sku, model: c.model, wattsPeak: c.wattsPeak!, unitPriceNgn: c.unitPriceNgn })),
-  };
-}
-
 export const calculateRoutes = new Hono<AppEnv>()
   /**
    * Main solar decision engine endpoint (PRD §22.2). Guests may calculate
@@ -148,16 +120,35 @@ export const calculateRoutes = new Hono<AppEnv>()
     }
     await consumeRateLimit(db, rateLimitKey(c, "calculate"), CALC_LIMIT_PER_MINUTE, 60);
 
+    const settings = await loadSettings(db);
+    // Schematics §1: runtime is the hours actually used inside each period, so it can't exceed the window.
+    const windows = periodWindows(settings.engine);
+    body.appliances.forEach((line, i) => {
+      if (line.dayHours > windows.dayHours) {
+        throw new ApiError(400, "INVALID_PAYLOAD", `Daytime use can be at most ${windows.dayHours} hours (${settings.engine.nightEnd}–${settings.engine.nightStart}).`, `appliances.${i}.dayHours`);
+      }
+      if (line.nightHours > windows.nightHours) {
+        throw new ApiError(400, "INVALID_PAYLOAD", `Night-time use can be at most ${windows.nightHours} hours (${settings.engine.nightStart}–${settings.engine.nightEnd}).`, `appliances.${i}.nightHours`);
+      }
+    });
+
     const [{ loads, warnings: inputWarnings }, sun, catalogue] = await Promise.all([
       resolveLoads(db, body.appliances),
       resolveSunHours(db, body.state),
       loadCatalogue(db),
     ]);
-    const auditInputs = { request: body, loads, sunHours: sun };
+    const auditInputs = { request: body, loads, sunHours: sun, settings };
 
     let result: EngineResult;
     try {
-      result = calculateSystem({ loads, sunHours: sun, batteryChemistry: body.batteryChemistry, engineerOverride: body.engineerOverride, catalogue });
+      result = calculateSystem({
+        loads,
+        sunHours: sun,
+        batteryChemistry: body.batteryChemistry,
+        engineerOverride: body.engineerOverride,
+        catalogue,
+        settings: settings.engine,
+      });
     } catch (err) {
       if (err instanceof EngineError) {
         await db.insert(quoteCalcAudit).values({
@@ -194,7 +185,8 @@ export const calculateRoutes = new Hono<AppEnv>()
       state: body.state,
       system: systemView(result),
       bom: result.bom,
-      pricing: priceBom(result.bom),
+      pricing: priceBom(result.bom, settings.pricing),
+      quoteEligible: result.validation.quoteEligible,
       warnings,
       // Full calculation sheet for engineers and admins only (US-009).
       ...(isEngineer ? { calculation: result } : {}),

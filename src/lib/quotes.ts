@@ -21,7 +21,10 @@ export interface QuoteView {
   pricing: {
     lines: { sku: string; type: string; model: string; quantity: number; unitPriceNgn: number; lineTotalNgn: number }[];
     equipmentSubtotalNgn: number;
+    installationRate: number;
+    installationFeeNgn: number;
     labourNgn: number;
+    discountNgn: number;
     vatNgn: number;
     vatRate: number;
     totalNgn: number;

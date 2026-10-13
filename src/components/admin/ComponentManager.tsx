@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,7 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Save, X } from "lucide-react";
+import { Plus, Save, SlidersHorizontal, X } from "lucide-react";
+import ComponentSpecEditor from "./ComponentSpecEditor";
 import type { BatteryChemistry, ComponentType } from "../../../shared/domain";
 import { api } from "@/lib/api";
 import { formatPrice } from "../utils/formatters";
@@ -27,6 +28,7 @@ interface Component {
   wattsPeak: number | null;
   unitPriceNgn: number;
   isActive: boolean;
+  [spec: string]: unknown;
 }
 
 const EMPTY_FORM = {
@@ -70,6 +72,7 @@ const ComponentManager = () => {
   const [loading, setLoading] = useState(true);
   const [priceDrafts, setPriceDrafts] = useState<Record<string, string>>({});
   const [showForm, setShowForm] = useState(false);
+  const [specsFor, setSpecsFor] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const run = useAdminAction();
 
@@ -210,11 +213,13 @@ const ComponentManager = () => {
                   <TableHead>Spec</TableHead>
                   <TableHead>Unit price</TableHead>
                   <TableHead>Active</TableHead>
+                  <TableHead><span className="sr-only">Specs</span></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {visible.map((c) => (
-                  <TableRow key={c.id}>
+                  <Fragment key={c.id}>
+                  <TableRow>
                     <TableCell className="font-mono text-xs">{c.sku}</TableCell>
                     <TableCell>
                       {c.model} <Badge variant="outline" className="ml-1 capitalize">{c.type}</Badge>
@@ -244,7 +249,30 @@ const ComponentManager = () => {
                         onCheckedChange={(checked) => patch(c.id, { isActive: checked }, `${c.model} ${checked ? "activated" : "marked out of stock"}`)}
                       />
                     </TableCell>
+                    <TableCell>
+                      <Button
+                        size="sm"
+                        variant={specsFor === c.id ? "secondary" : "ghost"}
+                        onClick={() => setSpecsFor((id) => (id === c.id ? null : c.id))}
+                        aria-expanded={specsFor === c.id}
+                        aria-label={`Datasheet specs for ${c.model}`}
+                      >
+                        <SlidersHorizontal className="w-4 h-4" />
+                      </Button>
+                    </TableCell>
                   </TableRow>
+                  {specsFor === c.id && (
+                    <TableRow>
+                      <TableCell colSpan={6}>
+                        <ComponentSpecEditor
+                          type={c.type}
+                          values={c as unknown as Record<string, number | null>}
+                          onSave={(specPatch) => patch(c.id, specPatch as Partial<Component>, `${c.model} specs updated`)}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  </Fragment>
                 ))}
               </TableBody>
             </Table>

@@ -2,8 +2,10 @@ import { asc, desc, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import { BATTERY_CHEMISTRIES, ROLES, type AuditAction } from "../../shared/domain";
+import { engineSettingsSchema, pricingSettingsSchema } from "../../shared/settings";
 import type { Db } from "../db/client";
-import { appliances, auditLog, components, sunHours, user, userProfiles } from "../db/schema";
+import { appliances, auditLog, components, settings, sunHours, user, userProfiles } from "../db/schema";
+import { loadSettings } from "../lib/settings";
 import type { AppEnv } from "../lib/context";
 import { ApiError, ok } from "../lib/http";
 import { currentUser, requireRole } from "../lib/middleware";
@@ -37,12 +39,37 @@ const componentBase = {
   isActive: z.boolean().default(true),
 };
 
+const optionalFraction = z.number().gt(0).lte(1).nullable().optional();
+const optionalPositive = z.number().positive().nullable().optional();
+const optionalPositiveInt = z.number().int().positive().nullable().optional();
+
+/** Manufacturer specs (schematics §2–§5). All optional: unknown values fall back to settings or are reported as unverified. */
+const inverterSpecs = {
+  efficiency: optionalFraction,
+  continuousW: optionalPositiveInt,
+  surgeW: optionalPositiveInt,
+  maxPvInputW: optionalPositiveInt,
+  maxPvVoc: optionalPositive,
+  maxPvIsc: optionalPositive,
+  mpptCount: optionalPositiveInt,
+};
+const batterySpecs = {
+  depthOfDischarge: optionalFraction,
+  dischargeEfficiency: optionalFraction,
+  maxDischargeW: optionalPositiveInt,
+};
+const panelSpecs = {
+  voc: optionalPositive,
+  isc: optionalPositive,
+};
+
 const componentCreate = z.discriminatedUnion("type", [
   z.object({
     ...componentBase,
     type: z.literal("inverter"),
     kva: z.number().positive().max(12, "Single inverters above 12kVA are not supported"),
     dcVoltage: z.union([z.literal(24), z.literal(48)]),
+    ...inverterSpecs,
   }),
   z.object({
     ...componentBase,
@@ -51,11 +78,14 @@ const componentCreate = z.discriminatedUnion("type", [
     dcVoltage: z.union([z.literal(12), z.literal(24), z.literal(48)]),
     capacityKwh: z.number().positive(),
     capacityAh: z.number().positive().nullable().optional(),
+    ...batterySpecs,
   }),
   z.object({
     ...componentBase,
     type: z.literal("panel"),
     wattsPeak: z.number().int().positive(),
+    performanceFactor: z.number().gt(0).lte(1).default(0.8),
+    ...panelSpecs,
   }),
 ]);
 
@@ -71,6 +101,10 @@ const componentPatch = z
     capacityKwh: z.number().positive(),
     capacityAh: z.number().positive().nullable(),
     wattsPeak: z.number().int().positive(),
+    performanceFactor: z.number().gt(0).lte(1),
+    ...inverterSpecs,
+    ...batterySpecs,
+    ...panelSpecs,
   })
   .partial()
   .strict()
@@ -241,6 +275,38 @@ export const adminRoutes = new Hono<AppEnv>()
     });
     return ok(c, updated);
   })
+
+  // ---- Engine and pricing settings -----------------------------------------
+  .get("/settings", async (c) => ok(c, await loadSettings(c.var.db)))
+  .patch(
+    "/settings",
+    validate("json", z.object({ engine: engineSettingsSchema.partial().strict(), pricing: pricingSettingsSchema.partial().strict() }).partial().strict()),
+    async (c) => {
+      const actor = currentUser(c);
+      const patch = c.req.valid("json");
+      const updated = await c.var.db.transaction(async (tx) => {
+        const before = await loadSettings(tx as unknown as Db);
+        const after = {
+          engine: engineSettingsSchema.parse({ ...before.engine, ...patch.engine }),
+          pricing: pricingSettingsSchema.parse({ ...before.pricing, ...patch.pricing }),
+        };
+        for (const key of ["engine", "pricing"] as const) {
+          await tx.insert(settings).values({ key, value: after[key] }).onConflictDoUpdate({ target: settings.key, set: { value: after[key] } });
+        }
+        await writeAudit(tx, {
+          actorId: actor.id,
+          action: "SETTINGS_UPDATE",
+          entityType: "settings",
+          entityId: "engine+pricing",
+          before,
+          after,
+          requestId: c.var.requestId,
+        });
+        return after;
+      });
+      return ok(c, updated);
+    },
+  )
 
   // ---- Users --------------------------------------------------------------
   .get("/users", async (c) => {

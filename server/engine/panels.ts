@@ -1,50 +1,78 @@
-import type { ChemistryParams } from "./constants";
-import { PANEL_DERATING, SYSTEM_LOSS_FACTOR } from "./constants";
+import { PV_VOC_COLD_FACTOR } from "./constants";
 import { EngineError } from "./errors";
 import { ceilSafe } from "./math";
-import type { LoadProfile, PanelSizing, PanelSku, SunHoursInput } from "./types";
+import type { InverterSku, LoadProfile, PanelSizing, PanelSku, PvCheck } from "./types";
 
 /**
- * Panels must cover daytime consumption AND replace the energy drawn from the
- * battery overnight (PRD §13.5 — never max(day, recharge)).
- *
- * Recharge energy is what the battery actually delivered, grossed up for the
- * inverter and battery round-trip losses (agreed v1.1 rule; not nameplate capacity).
- * Sized on wet-season sun hours so the system works all year (agreed v1.1 rule).
+ * PV input check against the inverter (schematics §5): array power, and — when
+ * both products carry electrical data — how many panels the MPPT inputs can
+ * take within their voltage and current limits.
+ * Returns "failed" when a known limit is exceeded, "unverified" when a limit is unknown.
+ */
+export function checkPvInput(inv: InverterSku, panel: PanelSku, count: number): PvCheck | "failed" {
+  let complete = true;
+  if (inv.maxPvInputW === null) complete = false;
+  else if (count * panel.wattsPeak > inv.maxPvInputW) return "failed";
+
+  if (inv.maxPvVoc !== null && inv.maxPvIsc !== null && panel.voc !== null && panel.isc !== null) {
+    const maxSeries = Math.floor(inv.maxPvVoc / (panel.voc * PV_VOC_COLD_FACTOR));
+    const maxParallel = Math.floor(inv.maxPvIsc / panel.isc) * (inv.mpptCount ?? 1);
+    if (count > maxSeries * maxParallel) return "failed";
+  } else {
+    complete = false;
+  }
+  return complete ? "passed" : "unverified";
+}
+
+/**
+ * Schematics §4:
+ *   effective W   = rated W × product performance factor
+ *   charging W    = battery nominal kWh × 1000 ÷ sun-hours
+ *   combined rule = ceil((peak W + charging W) ÷ effective W)
+ *   energy check  = count × effective W × sun-hours ÷ 1000 ≥ day kWh + battery nominal kWh
+ * When the combined rule fails the energy check, the count is raised to the
+ * smallest that passes (the "next valid configuration").
+ * Returns the cheapest valid array for this inverter, or null if none fits its PV input.
  */
 export function sizePanels(
   load: LoadProfile,
-  params: ChemistryParams,
-  sunHours: SunHoursInput,
+  batteryKwh: number,
+  sunHours: number,
   panels: PanelSku[],
-): PanelSizing {
+  inverter: InverterSku,
+): PanelSizing | null {
   if (panels.length === 0) {
     throw new EngineError("NO_SKU_AVAILABLE", "No solar panels are currently available in the catalogue.", "panels");
   }
-  const rechargeEnergyKwh = load.nightEnergyKwh / params.inverterEfficiency / params.roundTripEfficiency;
-  const totalPanelEnergyKwh = load.dayEnergyKwh + rechargeEnergyKwh;
-  const effectiveFactor = PANEL_DERATING * SYSTEM_LOSS_FACTOR;
-  const designSunHours = sunHours.wetSeason;
-  const requiredKwp = totalPanelEnergyKwh / (designSunHours * effectiveFactor);
+  const chargingW = (batteryKwh * 1000) / sunHours;
+  const combinedW = load.peakW + chargingW;
+  const requiredEnergyKwh = load.dayEnergyKwh + batteryKwh;
 
-  // Cheapest array that meets the requirement; fewer panels breaks ties.
-  const options = panels.map((panel) => {
-    const count = Math.max(1, ceilSafe(requiredKwp / (panel.wattsPeak / 1000)));
-    return { panel, count, cost: count * panel.unitPriceNgn };
+  const options = panels.flatMap((panel) => {
+    const effectivePanelW = panel.wattsPeak * panel.performanceFactor;
+    const combinedRuleCount = Math.max(1, ceilSafe(combinedW / effectivePanelW));
+    const energyCheckCount = Math.max(1, ceilSafe((requiredEnergyKwh * 1000) / (effectivePanelW * sunHours)));
+    const count = Math.max(combinedRuleCount, energyCheckCount);
+    const pvInput = checkPvInput(inverter, panel, count);
+    if (pvInput === "failed") return [];
+    const sizing: PanelSizing = {
+      panel,
+      sunHours,
+      effectivePanelW,
+      chargingW,
+      combinedW,
+      combinedRuleCount,
+      energyCheckCount,
+      count,
+      governedBy: energyCheckCount > combinedRuleCount ? "energy_check" : "combined_rule",
+      arrayWattsPeak: count * panel.wattsPeak,
+      estimatedPvEnergyKwh: (count * effectivePanelW * sunHours) / 1000,
+      requiredEnergyKwh,
+      pvInput,
+    };
+    return [{ sizing, cost: count * panel.unitPriceNgn }];
   });
-  options.sort((a, b) => a.cost - b.cost || a.count - b.count);
-  const best = options[0]!;
-  const arrayKwp = (best.count * best.panel.wattsPeak) / 1000;
-
-  return {
-    rechargeEnergyKwh,
-    totalPanelEnergyKwh,
-    designSunHours,
-    requiredKwp,
-    panel: best.panel,
-    count: best.count,
-    arrayKwp,
-    wetSeasonYieldKwh: arrayKwp * sunHours.wetSeason * effectiveFactor,
-    drySeasonYieldKwh: arrayKwp * sunHours.drySeason * effectiveFactor,
-  };
+  if (options.length === 0) return null;
+  options.sort((a, b) => a.cost - b.cost || a.sizing.count - b.sizing.count);
+  return options[0]!.sizing;
 }

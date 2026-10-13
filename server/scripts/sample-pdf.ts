@@ -1,6 +1,7 @@
 // Renders a sample quotation PDF without a database, for visual review.
 // Usage: npx tsx server/scripts/sample-pdf.ts <out.pdf>
 import { writeFile } from "node:fs/promises";
+import { DEFAULT_ENGINE_SETTINGS, DEFAULT_PRICING_SETTINGS } from "../../shared/settings";
 import { calculateSystem, priceBom } from "../engine";
 import { load, regionSunHours, seedCatalogue } from "../engine/__tests__/fixtures";
 import { loadPdfAssets } from "../pdf/assets";
@@ -14,8 +15,8 @@ const loads = [
   load("Refrigerator (Double Door)", 1, 11, 13),
   load("Ceiling Fan", 2, 8, 0),
 ];
-const result = calculateSystem({ loads, sunHours: regionSunHours("Middle Belt"), batteryChemistry: "lithium", engineerOverride: false, catalogue: seedCatalogue() });
-const pricing = priceBom(result.bom, { marginPct: 10, labourFlatFeeNgn: 250_000 });
+const result = calculateSystem({ loads, sunHours: regionSunHours("Middle Belt"), batteryChemistry: "lithium", engineerOverride: false, catalogue: seedCatalogue(), settings: DEFAULT_ENGINE_SETTINGS });
+const pricing = priceBom(result.bom, { ...DEFAULT_PRICING_SETTINGS, marginPct: 10, labourFlatFeeNgn: 250_000 });
 const now = new Date();
 const row = {
   id: "sample", reference: "PS-202610-SAMPLE", userId: null, installerId: "i", clientName: "Mrs Adaeze Okafor", state: "FCT",

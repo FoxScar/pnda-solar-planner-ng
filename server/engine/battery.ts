@@ -1,74 +1,92 @@
 import type { BatteryChemistry } from "../../shared/domain";
-import type { ChemistryParams } from "./constants";
-import { BATTERY_SAFETY_MARGIN, LEAD_ACID_BLOCK_VOLTAGE } from "./constants";
+import type { EngineSettings } from "../../shared/settings";
+import { LEAD_ACID_BLOCK_VOLTAGE } from "./constants";
 import { EngineError } from "./errors";
 import { ceilSafe } from "./math";
 import type { BatterySizing, BatterySku } from "./types";
 
-/** Required kWh = (night kWh ÷ inverter_eff ÷ battery_rte ÷ DoD) × 1.10 (PRD §15.2). */
-export function requiredBatteryKwh(nightEnergyKwh: number, params: ChemistryParams): number {
-  return (
-    (nightEnergyKwh / params.inverterEfficiency / params.roundTripEfficiency / params.depthOfDischarge) *
-    BATTERY_SAFETY_MARGIN
-  );
+/**
+ * Schematics §3: required nominal kWh =
+ *   night kWh × (1 + safety margin) ÷ (DoD × inverter efficiency × battery discharge efficiency)
+ */
+export function requiredBatteryKwh(
+  nightEnergyKwh: number,
+  safetyMargin: number,
+  depthOfDischarge: number,
+  inverterEfficiency: number,
+  dischargeEfficiency: number,
+): number {
+  return (nightEnergyKwh * (1 + safetyMargin)) / (depthOfDischarge * inverterEfficiency * dischargeEfficiency);
 }
 
 function blockAh(b: BatterySku): number {
   return b.capacityAh ?? (b.capacityKwh * 1000) / b.dcVoltage;
 }
 
-type Option = Omit<BatterySizing, "requiredKwh">;
-
-/** Lithium: identical modules at system voltage, parallel only (PRD §15.3). */
-function lithiumOption(b: BatterySku, requiredKwh: number): Option {
-  const units = Math.max(1, ceilSafe(requiredKwh / b.capacityKwh));
-  return { battery: b, seriesCount: 1, parallelStrings: units, totalUnits: units, installedKwh: units * b.capacityKwh };
+export interface BatteryRequest {
+  nightEnergyKwh: number;
+  chemistry: BatteryChemistry;
+  systemVoltage: number;
+  inverterEfficiency: number;
+  /** Power the bank must be able to deliver (W), for the discharge-rating check. */
+  dischargeDemandW: number;
 }
 
-/** Lead-acid: 12V blocks in series to reach system voltage, strings in parallel for Ah (PRD §15.4). */
-function leadAcidOption(b: BatterySku, requiredKwh: number, systemVoltage: number): Option {
-  const seriesCount = systemVoltage / LEAD_ACID_BLOCK_VOLTAGE;
-  const requiredAh = (requiredKwh * 1000) / systemVoltage;
-  const parallelStrings = Math.max(1, ceilSafe(requiredAh / blockAh(b)));
+function option(b: BatterySku, req: BatteryRequest, settings: EngineSettings): BatterySizing {
+  const defaults = settings.chemistryDefaults[b.chemistry];
+  const depthOfDischarge = b.depthOfDischarge ?? defaults.depthOfDischarge;
+  const dischargeEfficiency = b.dischargeEfficiency ?? defaults.dischargeEfficiency;
+  const requiredKwh = requiredBatteryKwh(req.nightEnergyKwh, settings.safetyMargin, depthOfDischarge, req.inverterEfficiency, dischargeEfficiency);
+
+  // Lithium: identical modules at system voltage, in parallel. Lead-acid: 12V blocks in series strings.
+  const seriesCount = b.chemistry === "lithium" ? 1 : req.systemVoltage / LEAD_ACID_BLOCK_VOLTAGE;
+  const forEnergy =
+    b.chemistry === "lithium"
+      ? ceilSafe(requiredKwh / b.capacityKwh)
+      : ceilSafe((requiredKwh * 1000) / req.systemVoltage / blockAh(b));
+  // Discharge power: every unit in the bank contributes its rating.
+  const forPower = b.maxDischargeW ? ceilSafe(req.dischargeDemandW / (b.maxDischargeW * seriesCount)) : 0;
+  const parallelStrings = Math.max(1, forEnergy, forPower);
   const totalUnits = seriesCount * parallelStrings;
-  return { battery: b, seriesCount, parallelStrings, totalUnits, installedKwh: totalUnits * b.capacityKwh };
+  return {
+    requiredKwh,
+    depthOfDischarge,
+    dischargeEfficiency,
+    battery: b,
+    seriesCount,
+    parallelStrings,
+    totalUnits,
+    installedKwh: totalUnits * b.capacityKwh,
+    bankDischargeW: b.maxDischargeW ? totalUnits * b.maxDischargeW : null,
+  };
 }
 
 /**
- * Picks the configuration with the fewest units (PRD §15.3); ties go to the
- * smallest installed capacity, then the lowest price. A single SKU is used for
- * the whole bank, so chemistry and capacity can never be mixed.
+ * Picks the bank with the fewest units (PRD §15.3); ties go to the smallest
+ * installed capacity, then the lowest price. One SKU per bank, so capacities
+ * and chemistries are never mixed.
  */
-export function selectBattery(
-  requiredKwh: number,
-  chemistry: BatteryChemistry,
-  systemVoltage: number,
-  batteries: BatterySku[],
-): BatterySizing {
-  const isLithium = chemistry === "lithium";
+export function selectBattery(req: BatteryRequest, batteries: BatterySku[], settings: EngineSettings): BatterySizing {
+  const isLithium = req.chemistry === "lithium";
   const candidates = batteries.filter((b) =>
     isLithium
-      ? b.chemistry === "lithium" && b.dcVoltage === systemVoltage
-      : b.chemistry === chemistry && b.dcVoltage === LEAD_ACID_BLOCK_VOLTAGE && systemVoltage % LEAD_ACID_BLOCK_VOLTAGE === 0,
+      ? b.chemistry === "lithium" && b.dcVoltage === req.systemVoltage
+      : b.chemistry === req.chemistry && b.dcVoltage === LEAD_ACID_BLOCK_VOLTAGE && req.systemVoltage % LEAD_ACID_BLOCK_VOLTAGE === 0,
   );
-
   if (candidates.length === 0) {
     throw new EngineError(
       "NO_SKU_AVAILABLE",
-      `No ${chemistry} battery compatible with a ${systemVoltage}V system is currently in stock.`,
+      `No ${req.chemistry} battery compatible with a ${req.systemVoltage}V system is currently in stock.`,
       "batteryChemistry",
-      { chemistry, systemVoltage },
+      { chemistry: req.chemistry, systemVoltage: req.systemVoltage },
     );
   }
-
-  const options = candidates.map((b) =>
-    isLithium ? lithiumOption(b, requiredKwh) : leadAcidOption(b, requiredKwh, systemVoltage),
-  );
+  const options = candidates.map((b) => option(b, req, settings));
   options.sort(
     (a, b) =>
       a.totalUnits - b.totalUnits ||
       a.installedKwh - b.installedKwh ||
       a.totalUnits * a.battery.unitPriceNgn - b.totalUnits * b.battery.unitPriceNgn,
   );
-  return { requiredKwh, ...options[0]! };
+  return options[0]!;
 }

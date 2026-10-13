@@ -225,8 +225,12 @@ export async function renderQuotePdf(quote: QuoteView, assets: PdfAssets, opts: 
   L.y -= 6;
   const totals: [string, string, boolean][] = [
     ["Equipment subtotal", naira(pricing.equipmentSubtotalNgn), false],
-    ["Labour", pricing.labourNgn > 0 ? naira(pricing.labourNgn) : "Quoted separately by installer", false],
-    [`VAT (${num(pricing.vatRate * 100)}%)`, naira(pricing.vatNgn), false],
+    ...(pricing.installationFeeNgn > 0
+      ? [[`Installation (${num(pricing.installationRate * 100)}%)`, naira(pricing.installationFeeNgn), false] as [string, string, boolean]]
+      : []),
+    ...(pricing.labourNgn > 0 ? [["Other fees", naira(pricing.labourNgn), false] as [string, string, boolean]] : []),
+    ...(pricing.discountNgn > 0 ? [["Discount", `−${naira(pricing.discountNgn)}`, false] as [string, string, boolean]] : []),
+    ...(pricing.vatRate > 0 ? [[`VAT (${num(pricing.vatRate * 100)}%)`, naira(pricing.vatNgn), false] as [string, string, boolean]] : []),
     ["Grand total", naira(pricing.totalNgn), true],
   ];
   const labelX = MARGIN + L.width - 330;

@@ -1,10 +1,12 @@
-import { VAT_RATE } from "./constants";
+import type { PricingSettings } from "../../shared/settings";
 import type { BomLine } from "./types";
 
-export interface PricingOptions {
+export interface PricingOptions extends PricingSettings {
   /** Installer margin as a percentage of equipment cost (e.g. 15 for 15%). */
   marginPct?: number;
+  /** Other fees, e.g. an installer's flat labour fee. */
   labourFlatFeeNgn?: number;
+  discountNgn?: number;
 }
 
 export interface PricedLine {
@@ -24,34 +26,45 @@ export interface Pricing {
   /** Portion of the subtotal that is installer margin (never shown to the client). */
   marginNgn: number;
   marginPct: number;
+  installationRate: number;
+  installationFeeNgn: number;
   labourNgn: number;
+  discountNgn: number;
+  vatRate: number;
   vatNgn: number;
   totalNgn: number;
-  vatRate: number;
 }
 
 /**
- * PRD §28.1: equipment × (1 + margin) + labour, then 7.5% VAT. The margin is
- * folded into each unit price so client documents show Equipment / Labour /
- * VAT / Total only (§29.1). Whole naira throughout.
+ * Schematics §6, whole naira:
+ *   item total       = quantity × current authorised unit price (installer margin folded in)
+ *   installation fee = subtotal × configured installation rate
+ *   total            = subtotal + installation fee + other fees − discounts (+ VAT at the configured rate)
  */
-export function priceBom(bom: BomLine[], { marginPct = 0, labourFlatFeeNgn = 0 }: PricingOptions = {}): Pricing {
+export function priceBom(bom: BomLine[], opts: PricingOptions): Pricing {
+  const { marginPct = 0, labourFlatFeeNgn = 0, discountNgn = 0, installationRate, vatRate } = opts;
   const lines = bom.map((l) => {
     const unitPriceNgn = Math.round(l.unitPriceNgn * (1 + marginPct / 100));
     return { sku: l.sku, type: l.type, model: l.model, quantity: l.quantity, unitPriceNgn, lineTotalNgn: unitPriceNgn * l.quantity };
   });
   const baseSubtotal = bom.reduce((sum, l) => sum + l.quantity * l.unitPriceNgn, 0);
   const equipmentSubtotalNgn = lines.reduce((sum, l) => sum + l.lineTotalNgn, 0);
+  const installationFeeNgn = Math.round(equipmentSubtotalNgn * installationRate);
   const labourNgn = Math.round(labourFlatFeeNgn);
-  const vatNgn = Math.round((equipmentSubtotalNgn + labourNgn) * VAT_RATE);
+  const discount = Math.round(discountNgn);
+  const beforeVat = equipmentSubtotalNgn + installationFeeNgn + labourNgn - discount;
+  const vatNgn = Math.round(beforeVat * vatRate);
   return {
     lines,
     equipmentSubtotalNgn,
     marginNgn: equipmentSubtotalNgn - baseSubtotal,
     marginPct,
+    installationRate,
+    installationFeeNgn,
     labourNgn,
+    discountNgn: discount,
+    vatRate,
     vatNgn,
-    totalNgn: equipmentSubtotalNgn + labourNgn + vatNgn,
-    vatRate: VAT_RATE,
+    totalNgn: beforeVat + vatNgn,
   };
 }

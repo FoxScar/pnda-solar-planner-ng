@@ -5,6 +5,7 @@ import { Shield, LogOut } from "lucide-react";
 import ApplianceManager from "./ApplianceManager";
 import ComponentManager from "./ComponentManager";
 import SunHoursManager from "./SunHoursManager";
+import SettingsManager from "./SettingsManager";
 import UserManager from "./UserManager";
 
 interface AdminDashboardProps {
@@ -31,15 +32,17 @@ const AdminDashboard = ({ email, onSignOut }: AdminDashboardProps) => (
     </CardHeader>
     <CardContent>
       <Tabs defaultValue="components" className="w-full">
-        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 h-auto">
+        <TabsList className="grid w-full grid-cols-3 sm:grid-cols-5 h-auto">
           <TabsTrigger value="components">Components</TabsTrigger>
           <TabsTrigger value="appliances">Appliances</TabsTrigger>
           <TabsTrigger value="sun-hours">Sun Hours</TabsTrigger>
+          <TabsTrigger value="settings">Settings</TabsTrigger>
           <TabsTrigger value="users">Users</TabsTrigger>
         </TabsList>
         <TabsContent value="components" className="mt-6"><ComponentManager /></TabsContent>
         <TabsContent value="appliances" className="mt-6"><ApplianceManager /></TabsContent>
         <TabsContent value="sun-hours" className="mt-6"><SunHoursManager /></TabsContent>
+        <TabsContent value="settings" className="mt-6"><SettingsManager /></TabsContent>
         <TabsContent value="users" className="mt-6"><UserManager /></TabsContent>
       </Tabs>
     </CardContent>
