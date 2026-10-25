@@ -29,3 +29,7 @@ dist-ssr
 !.env.example
 bun.lockb
 coverage
+
+# Owner documents kept out of the repo
+/PandaSolution_*.pdf
+/PandaSolution_*.docx
