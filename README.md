@@ -1,73 +1,94 @@
-# Welcome to your Lovable project
+# PandaSolution
 
-## Project info
+Engineering-grade solar sizing and quotation platform for Nigeria. See `PandaSolution_PRD_v1.0.docx`
+for the product requirements and [`docs/PRD-v1.1-decisions.md`](docs/PRD-v1.1-decisions.md) for the
+changes agreed since.
 
-**URL**: https://lovable.dev/projects/dcff69c8-1764-49c4-9ab1-073dd561938a
+## Stack
 
-## How can I edit this code?
+| Layer | Technology |
+|---|---|
+| Frontend | Vite + React + TypeScript, Tailwind, shadcn/ui |
+| API | Hono (TypeScript) — runs on Node locally, deployable to Cloudflare Workers |
+| Database | PostgreSQL 16 via Drizzle ORM (Docker locally, Neon in production) |
+| Auth | Better Auth (email + password, sessions in Postgres) with roles: consumer, installer, engineer, admin |
+| Tests | Vitest — API integration tests run against a real Postgres test database |
 
-There are several ways of editing your application.
-
-**Use Lovable**
-
-Simply visit the [Lovable Project](https://lovable.dev/projects/dcff69c8-1764-49c4-9ab1-073dd561938a) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+```
+src/        React frontend
+server/     Hono API: routes, auth, Drizzle schema, migrations, seed data
+shared/     Types and constants used by both sides
 ```
 
-**Edit a file directly in GitHub**
+## Local setup
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+Requires Node 22+ and Docker.
 
-**Use GitHub Codespaces**
+```sh
+npm install
+cp .env.example .env                       # then set BETTER_AUTH_SECRET (openssl rand -base64 32)
+npm run db:setup                           # start Postgres, run migrations, seed catalogue
+npm run dev:api                            # API on http://localhost:8787
+npm run dev                                # app on http://localhost:8080 (proxies /api to the API)
+```
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+Create the first admin: sign up in the app, then
 
-## What technologies are used for this project?
+```sh
+npm run admin:promote -- you@example.com
+```
 
-This project is built with:
+Further roles are assigned from the admin panel at `/admin`.
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+## Deployment (free tier)
 
-## How can I deploy this project?
+Live at **https://pandasolution.onrender.com**.
 
-Simply open [Lovable](https://lovable.dev/projects/dcff69c8-1764-49c4-9ab1-073dd561938a) and click on Share -> Publish.
+| Piece | Where |
+|---|---|
+| Web service (API + built frontend, one origin) | Render free plan, Frankfurt — `render.yaml` |
+| Database | Neon free Postgres, `aws-eu-central-1`, project `pandasolution` |
+| Auth secret | Render environment variable `BETTER_AUTH_SECRET` |
 
-## Can I connect a custom domain to my Lovable project?
+Pushes to `main` redeploy automatically; migrations and seed data run on every start (both are
+idempotent). `BETTER_AUTH_URL`/`PUBLIC_APP_URL` default to Render's `RENDER_EXTERNAL_URL` — set them
+when a custom domain is added.
 
-Yes, you can!
+Free-tier limits: the Render service sleeps after 15 minutes idle (about a minute to wake);
+Neon's free plan allows 0.5 GB of storage.
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+## Scripts
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+| Command | What it does |
+|---|---|
+| `npm run db:generate` | Generate a migration after editing `server/db/schema.ts` |
+| `npm run db:migrate` | Apply migrations |
+| `npm run db:seed` | Insert missing catalogue rows (never overwrites admin edits) |
+| `npm test` | Run the test suite (rebuilds the `pandasolution_test` database) |
+| `npm run typecheck` / `npm run lint` | Static checks (CI runs these plus tests and build) |
+
+## API
+
+Key endpoints:
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /api/v1/calculate` | Sizing engine (guests allowed, 10/min) |
+| `POST /api/v1/quotes` | Save a calculation as a quote |
+| `GET /api/v1/quotes/:id` · `/pdf` | Quote detail and PDF (PDF ad-gated for free users) |
+| `POST /api/v1/quotes/:id/ad/start` · `/complete` | Server-verified ad gate |
+| `GET /api/v1/public/quotes/:token` · `/pdf` | Public share link, valid 30 days |
+| `POST /api/v1/validate-config` | Check an inverter/battery combination |
+| `GET /api/v1/appliances`, `/sun-hours` | Public catalogue |
+| `/api/v1/admin/*` | Components, appliances, sun hours, users, audit log |
+
+`npx tsx server/scripts/sample-pdf.ts out.pdf` renders a sample quotation without a database.
+
+The sizing engine is a pure module in `server/engine/` with 100% test coverage enforced
+(`npm run test:coverage`); reference designs are documented in `docs/reference-designs.md`.
+
+All endpoints live under `/api/v1` and return `{ success, data, meta }` or `{ success: false, error: { code, message, field? } }`.
+Auth endpoints are served by Better Auth under `/api/auth`.
+
+Prices, inventory, sun hours and role changes are written to an append-only `audit_log`; the database
+rejects any UPDATE, DELETE or TRUNCATE on it.

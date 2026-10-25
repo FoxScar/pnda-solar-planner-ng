@@ -1,6 +1,6 @@
 
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -20,11 +20,15 @@ const Auth = () => {
   const [error, setError] = useState<string | null>(null);
   const { signIn, signUp, user } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  // Only same-site paths, so the parameter can't be used as an open redirect.
+  const nextParam = searchParams.get('next') ?? '/';
+  const next = nextParam.startsWith('/') && !nextParam.startsWith('//') ? nextParam : '/';
   const { toast } = useToast();
 
   // Redirect if already authenticated
   if (user) {
-    navigate('/');
+    navigate(next);
     return null;
   }
 
@@ -60,12 +64,12 @@ const Auth = () => {
         : await signUp(email, password, formatWhatsAppNumber(whatsappNumber));
 
       if (error) {
-        if (error.message.includes('Invalid login credentials')) {
+        if (error.message.includes('Invalid email or password')) {
           setError('Invalid email or password. Please try again.');
-        } else if (error.message.includes('User already registered')) {
+        } else if (error.message.includes('User already exists')) {
           setError('An account with this email already exists. Please sign in instead.');
-        } else if (error.message.includes('Password should be at least')) {
-          setError('Password must be at least 6 characters long.');
+        } else if (error.message.includes('Password too short')) {
+          setError('Password must be at least 8 characters long.');
         } else {
           setError(error.message);
         }
@@ -75,12 +79,13 @@ const Auth = () => {
             title: "Welcome back!",
             description: "You have successfully signed in.",
           });
-          navigate('/');
+          navigate(next);
         } else {
           toast({
             title: "Account created!",
-            description: "Please check your email to verify your account.",
+            description: "You're signed in and can now save quotes.",
           });
+          navigate(next);
         }
       }
     } catch (err) {
@@ -143,7 +148,7 @@ const Auth = () => {
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={loading}
                 required
-                minLength={6}
+                minLength={8}
               />
             </div>
 

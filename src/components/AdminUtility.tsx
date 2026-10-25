@@ -1,50 +1,22 @@
-
-import { useAdminAuth } from "./admin/useAdminAuth";
+import { hasRoleAtLeast } from "../../shared/domain";
+import { useAuth } from "@/contexts/AuthContext";
 import AdminAuthForm from "./admin/AdminAuthForm";
 import AdminDashboard from "./admin/AdminDashboard";
 import AdminAccessDenied from "./admin/AdminAccessDenied";
 
 const AdminUtility = () => {
-  const {
-    currentUser,
-    userRoles,
-    isAdmin,
-    needsInitialAdmin,
-    loading,
-    refreshing,
-    handleSignOut,
-    bootstrapInitialAdmin,
-    handleAuthSuccess,
-    refreshAdminData
-  } = useAdminAuth();
+  const { user, loading, signOut } = useAuth();
 
-  if (currentUser && isAdmin) {
-    return (
-      <AdminDashboard 
-        currentUser={currentUser}
-        onSignOut={handleSignOut}
-        onRefresh={refreshAdminData}
-        refreshing={refreshing}
-      />
-    );
+  if (loading) {
+    return <p className="text-center text-gray-600">Loading…</p>;
   }
-
-  if (currentUser && !isAdmin) {
-    return (
-      <AdminAccessDenied
-        currentUser={currentUser}
-        userRoles={userRoles}
-        needsInitialAdmin={needsInitialAdmin}
-        loading={loading}
-        onSignOut={handleSignOut}
-        onBootstrapAdmin={bootstrapInitialAdmin}
-      />
-    );
+  if (!user) {
+    return <AdminAuthForm />;
   }
-
-  return (
-    <AdminAuthForm onAuthSuccess={handleAuthSuccess} />
-  );
+  if (!hasRoleAtLeast(user.role, "admin")) {
+    return <AdminAccessDenied email={user.email} role={user.role} onSignOut={signOut} />;
+  }
+  return <AdminDashboard email={user.email} onSignOut={signOut} />;
 };
 
 export default AdminUtility;

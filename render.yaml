@@ -1,0 +1,24 @@
+# Render Blueprint: one free web service serving the API and the built frontend.
+# The database is Neon (free, no expiry); set DATABASE_URL to its pooled connection string.
+services:
+  - type: web
+    name: pandasolution
+    runtime: node
+    plan: free
+    region: frankfurt # closest Render region to Nigeria
+    branch: main
+    buildCommand: npm ci && npm run build
+    # Migrations and seed are idempotent, so running them on every start is safe.
+    startCommand: npm run db:migrate && npm run db:seed && npm start
+    healthCheckPath: /api/v1/health
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        sync: false # Neon pooled connection string, set in the Render dashboard
+      - key: BETTER_AUTH_SECRET
+        generateValue: true
+      - key: STATIC_DIR
+        value: dist
+      # BETTER_AUTH_URL / PUBLIC_APP_URL default to Render's RENDER_EXTERNAL_URL.
+      # Set them when a custom domain is added.
+

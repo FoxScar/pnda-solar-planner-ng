@@ -22,3 +22,14 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Environment
+.env
+.env.*
+!.env.example
+bun.lockb
+coverage
+
+# Owner documents kept out of the repo
+/PandaSolution_*.pdf
+/PandaSolution_*.docx

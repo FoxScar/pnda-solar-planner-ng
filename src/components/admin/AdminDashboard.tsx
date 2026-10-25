@@ -1,88 +1,49 @@
-
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Shield, LogOut, RefreshCw } from "lucide-react";
-import { User } from '@supabase/supabase-js';
+import { Shield, LogOut } from "lucide-react";
 import ApplianceManager from "./ApplianceManager";
-import InverterManager from "./InverterManager";
-import BatteryManager from "./BatteryManager";
-import PanelManager from "./PanelManager";
+import ComponentManager from "./ComponentManager";
+import SunHoursManager from "./SunHoursManager";
+import SettingsManager from "./SettingsManager";
+import UserManager from "./UserManager";
 
 interface AdminDashboardProps {
-  currentUser: User;
+  email: string;
   onSignOut: () => void;
-  onRefresh: () => void;
-  refreshing: boolean;
 }
 
-const AdminDashboard = ({ currentUser, onSignOut, onRefresh, refreshing }: AdminDashboardProps) => {
-  return (
-    <Card className="w-full max-w-6xl mx-auto mt-8">
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <Shield className="w-5 h-5 text-blue-500" />
-            Admin Panel
-          </CardTitle>
-          <div className="flex items-center gap-2">
-            <Button 
-              onClick={onRefresh} 
-              variant="outline" 
-              size="sm"
-              disabled={refreshing}
-              className="flex items-center gap-2"
-            >
-              <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-              Refresh
-            </Button>
-            <Button 
-              onClick={onSignOut} 
-              variant="outline" 
-              size="sm"
-              className="flex items-center gap-2"
-            >
-              <LogOut className="w-4 h-4" />
-              Sign Out
-            </Button>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
-          <div className="flex items-center gap-2 text-green-700">
-            <Shield className="w-4 h-4" />
-            <span className="font-medium">Logged in as: {currentUser.email}</span>
-          </div>
-        </div>
-
-        <Tabs defaultValue="appliances" className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="appliances">Appliances</TabsTrigger>
-            <TabsTrigger value="inverters">Inverters</TabsTrigger>
-            <TabsTrigger value="batteries">Batteries</TabsTrigger>
-            <TabsTrigger value="panels">Panels</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="appliances" className="mt-6">
-            <ApplianceManager />
-          </TabsContent>
-          
-          <TabsContent value="inverters" className="mt-6">
-            <InverterManager />
-          </TabsContent>
-          
-          <TabsContent value="batteries" className="mt-6">
-            <BatteryManager />
-          </TabsContent>
-          
-          <TabsContent value="panels" className="mt-6">
-            <PanelManager />
-          </TabsContent>
-        </Tabs>
-      </CardContent>
-    </Card>
-  );
-};
+const AdminDashboard = ({ email, onSignOut }: AdminDashboardProps) => (
+  <Card className="w-full max-w-6xl mx-auto">
+    <CardHeader className="px-3 sm:px-6">
+      <div className="flex items-center justify-between gap-2">
+        <CardTitle className="flex min-w-0 items-center gap-2 text-base font-medium">
+          <Shield className="w-5 h-5 shrink-0 text-blue-500" />
+          <span className="truncate">{email}</span>
+        </CardTitle>
+        <Button onClick={onSignOut} variant="outline" className="h-11 shrink-0 px-3" aria-label="Sign out">
+          <LogOut className="w-4 h-4 sm:mr-2" />
+          <span className="hidden sm:inline">Sign Out</span>
+        </Button>
+      </div>
+    </CardHeader>
+    <CardContent className="px-3 sm:px-6">
+      <Tabs defaultValue="components" className="w-full">
+        <TabsList className="grid w-full grid-cols-3 sm:grid-cols-5 h-auto">
+          <TabsTrigger value="components" className="min-h-11">Components</TabsTrigger>
+          <TabsTrigger value="appliances" className="min-h-11">Appliances</TabsTrigger>
+          <TabsTrigger value="sun-hours" className="min-h-11">Sun Hours</TabsTrigger>
+          <TabsTrigger value="settings" className="min-h-11">Settings</TabsTrigger>
+          <TabsTrigger value="users" className="min-h-11">Users</TabsTrigger>
+        </TabsList>
+        <TabsContent value="components" className="mt-6"><ComponentManager /></TabsContent>
+        <TabsContent value="appliances" className="mt-6"><ApplianceManager /></TabsContent>
+        <TabsContent value="sun-hours" className="mt-6"><SunHoursManager /></TabsContent>
+        <TabsContent value="settings" className="mt-6"><SettingsManager /></TabsContent>
+        <TabsContent value="users" className="mt-6"><UserManager /></TabsContent>
+      </Tabs>
+    </CardContent>
+  </Card>
+);
 
 export default AdminDashboard;

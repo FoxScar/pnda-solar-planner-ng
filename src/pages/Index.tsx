@@ -5,36 +5,29 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Sun, Zap, Battery, PanelsTopLeft, AlertTriangle, User, FileText, LogOut } from "lucide-react";
+import { Sun, Zap, MapPin, AlertTriangle, User, FileText, LogOut } from "lucide-react";
 import ApplianceSelection from '@/components/ApplianceSelection';
-import InverterSizing from '@/components/InverterSizing';
-import BatterySizing from '@/components/BatterySizing';
-import PanelSizing from '@/components/PanelSizing';
-import ReviewQuote from '@/components/ReviewQuote';
+import LocationStep from '@/components/LocationStep';
+import SystemResult from '@/components/SystemResult';
 import SavedQuotes from '@/components/SavedQuotes';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from "@/hooks/use-toast";
 import pndaSolarLogo from '@/assets/pnda-solar-simple-logo.png';
 
+const WIZARD_STEP_COUNT = 3;
+
 const Index = () => {
   const [currentStep, setCurrentStep] = useState(() => {
-    const saved = localStorage.getItem('solar-wizard-step');
-    return saved ? parseInt(saved, 10) : 0;
+    // Clamp: older versions of the wizard had more steps.
+    const saved = parseInt(localStorage.getItem('solar-wizard-step') ?? '0', 10);
+    return Number.isFinite(saved) ? Math.min(Math.max(saved, 0), WIZARD_STEP_COUNT) : 0;
   });
   const [applianceData, setApplianceData] = useState(() => {
     const saved = localStorage.getItem('solar-wizard-appliances');
     return saved ? JSON.parse(saved) : [];
   });
-  const [inverterData, setInverterData] = useState(() => {
-    const saved = localStorage.getItem('solar-wizard-inverter');
-    return saved ? JSON.parse(saved) : null;
-  });
-  const [batteryData, setBatteryData] = useState(() => {
-    const saved = localStorage.getItem('solar-wizard-battery');
-    return saved ? JSON.parse(saved) : null;
-  });
-  const [panelData, setPanelData] = useState(() => {
-    const saved = localStorage.getItem('solar-wizard-panels');
+  const [locationData, setLocationData] = useState(() => {
+    const saved = localStorage.getItem('solar-wizard-location');
     return saved ? JSON.parse(saved) : null;
   });
   const [globalError, setGlobalError] = useState(null);
@@ -53,23 +46,13 @@ const Index = () => {
   }, [applianceData]);
 
   useEffect(() => {
-    localStorage.setItem('solar-wizard-inverter', JSON.stringify(inverterData));
-  }, [inverterData]);
-
-  useEffect(() => {
-    localStorage.setItem('solar-wizard-battery', JSON.stringify(batteryData));
-  }, [batteryData]);
-
-  useEffect(() => {
-    localStorage.setItem('solar-wizard-panels', JSON.stringify(panelData));
-  }, [panelData]);
+    localStorage.setItem('solar-wizard-location', JSON.stringify(locationData));
+  }, [locationData]);
 
   const steps = [
     { name: 'Appliances', icon: Zap, component: ApplianceSelection },
-    { name: 'Inverter', icon: Sun, component: InverterSizing },
-    { name: 'Battery', icon: Battery, component: BatterySizing },
-    { name: 'Panels', icon: PanelsTopLeft, component: PanelSizing },
-    { name: 'Review', icon: Sun, component: ReviewQuote }
+    { name: 'Location', icon: MapPin, component: LocationStep },
+    { name: 'Your System', icon: Sun, component: SystemResult }
   ];
 
   // Calculate progress correctly - exclude welcome screen from calculation
@@ -80,9 +63,7 @@ const Index = () => {
   const clearLocalStorage = () => {
     localStorage.removeItem('solar-wizard-step');
     localStorage.removeItem('solar-wizard-appliances');
-    localStorage.removeItem('solar-wizard-inverter');
-    localStorage.removeItem('solar-wizard-battery');
-    localStorage.removeItem('solar-wizard-panels');
+    localStorage.removeItem('solar-wizard-location');
   };
 
   const handleSignOut = async () => {
@@ -90,9 +71,7 @@ const Index = () => {
       await signOut();
       setCurrentStep(0);
       setApplianceData([]);
-      setInverterData(null);
-      setBatteryData(null);
-      setPanelData(null);
+      setLocationData(null);
       setShowSavedQuotes(false);
       clearLocalStorage();
       toast({
@@ -107,20 +86,6 @@ const Index = () => {
         variant: "destructive"
       });
     }
-  };
-
-  const handleLoadQuote = (quoteData: any) => {
-    // Load the quote data into the current state
-    setApplianceData(quoteData.appliances_data || []);
-    setInverterData(quoteData.inverter_data || null);
-    setBatteryData(quoteData.battery_data || null);
-    setPanelData(quoteData.panel_data || null);
-    setShowSavedQuotes(false);
-    setCurrentStep(5); // Go to review step
-    toast({
-      title: "Quote Loaded",
-      description: "Your saved quote has been loaded successfully.",
-    });
   };
 
   const handleNext = (data) => {
@@ -138,35 +103,17 @@ const Index = () => {
           }
           setApplianceData(data.appliances);
           break;
-        case 2: // From InverterSizing
-          if (!data || !data.inverter_id) {
-            setGlobalError('Please select an inverter before proceeding.');
+        case 2: // From LocationStep
+          if (!data?.location?.state) {
+            setGlobalError('Please select your state before proceeding.');
             return;
           }
-          setInverterData(data);
-          break;
-        case 3: // From BatterySizing
-          if (!data || !data.battery_id) {
-            setGlobalError('Please select a battery system before proceeding.');
-            return;
-          }
-          setBatteryData(data);
-          break;
-        case 4: // From PanelSizing
-          if (!data || !data.panels || !data.state) {
-            setGlobalError('Please select solar panels and specify your location before proceeding.');
-            return;
-          }
-          setPanelData(data);
+          setLocationData(data.location);
           break;
       }
       
       if (currentStep < steps.length) {
         setCurrentStep(currentStep + 1);
-        toast({
-          title: "Progress Saved",
-          description: `Step ${currentStep} completed successfully.`,
-        });
       }
     } catch (error) {
       console.error('Error in handleNext:', error);
@@ -218,14 +165,14 @@ const Index = () => {
         <div className="container mx-auto px-4 py-6">
           {/* Header */}
           <div className="mb-6">
-            <div className="flex items-center justify-between mb-4">
-              <h1 className="text-xl font-bold text-gray-900">P'NDA SOLAR</h1>
+            <div className="flex items-center justify-between gap-2 mb-4">
+              <h1 className="text-xl font-bold text-gray-900 whitespace-nowrap">P'NDA SOLAR</h1>
               {user && (
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-600">Welcome, {user.email}</span>
-                  <Button variant="outline" size="sm" onClick={handleSignOut}>
-                    <LogOut className="w-4 h-4 mr-1" />
-                    Sign Out
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-sm text-gray-600 hidden md:inline truncate">{user.email}</span>
+                  <Button variant="outline" onClick={handleSignOut} className="h-11 px-3" aria-label="Sign out">
+                    <LogOut className="w-4 h-4 sm:mr-1" />
+                    <span className="hidden sm:inline">Sign Out</span>
                   </Button>
                 </div>
               )}
@@ -234,7 +181,6 @@ const Index = () => {
 
           <SavedQuotes 
             onBack={() => setShowSavedQuotes(false)} 
-            onLoadQuote={handleLoadQuote}
           />
         </div>
       </div>
@@ -323,16 +269,14 @@ const Index = () => {
                 onClick={handleStart}
                 className="w-full bg-gradient-to-r from-orange-500 to-yellow-500 hover:from-orange-600 hover:to-yellow-600 text-white font-semibold py-3 text-lg"
               >
-                {applianceData.length > 0 || inverterData || batteryData || panelData ? 'Continue Where I Left Off' : 'Start Sizing My Solar System'}
+                {applianceData.length > 0 ? 'Continue Where I Left Off' : 'Start Sizing My Solar System'}
               </Button>
-              {(applianceData.length > 0 || inverterData || batteryData || panelData) && (
+              {(applianceData.length > 0) && (
                 <Button 
                   onClick={() => {
                     setCurrentStep(0);
                     setApplianceData([]);
-                    setInverterData(null);
-                    setBatteryData(null);
-                    setPanelData(null);
+                    setLocationData(null);
                     clearLocalStorage();
                     toast({
                       title: "Progress Cleared",
@@ -359,23 +303,23 @@ const Index = () => {
       <div className="container mx-auto px-4 py-6">
         {/* Header with Progress */}
         <div className="mb-6">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
+          <div className="flex items-center justify-between gap-2 mb-1">
             <h1 className="text-xl font-bold text-gray-900">P'NDA SOLAR</h1>
-            <div className="flex items-center justify-between sm:gap-4">
-              <div className="text-sm text-gray-600">
-                Step {currentStep} of {totalSteps}
+            {user && (
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-600 hidden md:inline">{user.email}</span>
+                <Button variant="outline" onClick={() => setShowSavedQuotes(true)} className="h-11 px-3" aria-label="My quotes">
+                  <FileText className="w-4 h-4 sm:mr-1" />
+                  <span className="hidden sm:inline">My Quotes</span>
+                </Button>
+                <Button variant="outline" onClick={handleSignOut} className="h-11 px-3" aria-label="Sign out">
+                  <LogOut className="w-4 h-4 sm:mr-1" />
+                  <span className="hidden sm:inline">Sign Out</span>
+                </Button>
               </div>
-              {user && (
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-600 hidden sm:inline">Welcome, {user.email}</span>
-                  <Button variant="outline" size="sm" onClick={handleSignOut}>
-                    <LogOut className="w-4 h-4 sm:mr-1" />
-                    <span className="hidden sm:inline">Sign Out</span>
-                  </Button>
-                </div>
-              )}
-            </div>
+            )}
           </div>
+          <p className="text-sm text-gray-600 mb-3">Step {currentStep} of {totalSteps}</p>
           
           <div className="space-y-2">
             <Progress value={progress} className="h-2" />
@@ -413,9 +357,7 @@ const Index = () => {
           onBack={handleBack}
           data={{
             appliances: applianceData,
-            inverter: inverterData,
-            battery: batteryData,
-            panels: panelData
+            location: locationData
           }}
         />
       </div>

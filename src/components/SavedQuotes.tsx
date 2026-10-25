@@ -1,143 +1,52 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { FileText, Calendar, Trash2, AlertTriangle, Loader2 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { FileText, Calendar, AlertTriangle, Loader2, MapPin } from "lucide-react";
+import type { QuoteStatus } from '../../shared/domain';
 import { useAuth } from '@/contexts/AuthContext';
-import { useToast } from "@/hooks/use-toast";
-import { Json } from '@/integrations/supabase/types';
+import { api, ApiClientError } from '@/lib/api';
+import { formatPrice } from './utils/formatters';
 
-interface SavedQuote {
+interface QuoteSummary {
   id: string;
-  quote_data: Json;
-  appliances_data: Json;
-  inverter_data: Json;
-  battery_data: Json;
-  panel_data: Json;
-  total_cost: number;
-  created_at: string;
+  reference: string;
+  clientName: string | null;
+  state: string;
+  status: QuoteStatus;
+  flags: string[];
+  totalCostNgn: number;
+  createdAt: string;
+  expiresAt: string;
 }
 
-const SavedQuotes = ({ onBack, onLoadQuote }: { 
-  onBack: () => void;
-  onLoadQuote: (quoteData: any) => void;
-}) => {
-  const [quotes, setQuotes] = useState<SavedQuote[]>([]);
+interface QuotePage {
+  items: QuoteSummary[];
+  page: number;
+  pageSize: number;
+  total: number;
+}
+
+const formatDate = (iso: string) =>
+  new Date(iso).toLocaleDateString('en-NG', { year: 'numeric', month: 'short', day: 'numeric' });
+
+const SavedQuotes = ({ onBack }: { onBack: () => void }) => {
+  const [quotes, setQuotes] = useState<QuoteSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
   const { user } = useAuth();
-  const { toast } = useToast();
+  const navigate = useNavigate();
 
   useEffect(() => {
-    if (user) {
-      fetchQuotes();
-    }
+    if (!user) return;
+    setLoading(true);
+    api<QuotePage>('/quotes')
+      .then((page) => setQuotes(page.items))
+      .catch((err) => setError(err instanceof ApiClientError ? err.message : 'Failed to load your quotes.'))
+      .finally(() => setLoading(false));
   }, [user]);
-
-  const fetchQuotes = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const { data, error } = await supabase
-        .from('quotes')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        throw error;
-      }
-
-      setQuotes(data || []);
-    } catch (err: any) {
-      console.error('Error fetching quotes:', err);
-      setError('Unable to load your saved quotes. Please try again.');
-      toast({
-        title: "Error Loading Quotes",
-        description: "There was a problem loading your saved quotes.",
-        variant: "destructive"
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const deleteQuote = async (quoteId: string) => {
-    try {
-      setDeletingId(quoteId);
-      
-      const { error } = await supabase
-        .from('quotes')
-        .delete()
-        .eq('id', quoteId);
-
-      if (error) {
-        throw error;
-      }
-
-      setQuotes(quotes.filter(quote => quote.id !== quoteId));
-      toast({
-        title: "Quote Deleted",
-        description: "Your quote has been successfully deleted.",
-      });
-    } catch (err: any) {
-      console.error('Error deleting quote:', err);
-      toast({
-        title: "Delete Failed",
-        description: "Unable to delete the quote. Please try again.",
-        variant: "destructive"
-      });
-    } finally {
-      setDeletingId(null);
-    }
-  };
-
-  const formatPrice = (price: number) => {
-    return new Intl.NumberFormat('en-NG', {
-      style: 'currency',
-      currency: 'NGN',
-      minimumFractionDigits: 0
-    }).format(price);
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-NG', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-
-  const getAppliancesCount = (appliancesData: Json): number => {
-    if (Array.isArray(appliancesData)) {
-      return appliancesData.length;
-    }
-    return 0;
-  };
-
-  const getAppliancesPreview = (appliancesData: Json): string => {
-    if (Array.isArray(appliancesData)) {
-      const names = appliancesData.slice(0, 2).map((app: any) => app.name || 'Unknown').join(', ');
-      if (appliancesData.length > 2) {
-        return `${names} +${appliancesData.length - 2} more`;
-      }
-      return names;
-    }
-    return 'No appliances';
-  };
-
-  const getSystemType = (inverterData: Json): string => {
-    if (typeof inverterData === 'object' && inverterData !== null) {
-      const inverter = inverterData as any;
-      return inverter.model_name?.includes('Hybrid') ? 'Hybrid' : 'Off-Grid';
-    }
-    return 'Unknown';
-  };
 
   if (loading) {
     return (
@@ -157,9 +66,7 @@ const SavedQuotes = ({ onBack, onLoadQuote }: {
           <FileText className="w-5 h-5 text-green-500" />
           Your Saved Quotes
         </CardTitle>
-        <CardDescription>
-          View and manage your solar system quotes
-        </CardDescription>
+        <CardDescription>Quotes stay valid for 30 days from the date they were generated.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         {error && (
@@ -173,70 +80,35 @@ const SavedQuotes = ({ onBack, onLoadQuote }: {
           <div className="text-center py-12">
             <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">No Saved Quotes</h3>
-            <p className="text-gray-600 mb-4">
-              You haven't saved any solar system quotes yet. Complete a quote to save it for later.
-            </p>
+            <p className="text-gray-600 mb-4">Quotes you generate will appear here.</p>
           </div>
         ) : (
           <div className="grid gap-4">
             {quotes.map((quote) => (
-              <Card key={quote.id} className="border-l-4 border-l-orange-500">
-                <CardContent className="p-6">
-                  <div className="flex justify-between items-start mb-4">
-                    <div>
-                      <div className="flex items-center gap-2 mb-2">
-                        <Calendar className="w-4 h-4 text-gray-500" />
-                        <span className="text-sm text-gray-600">
-                          {formatDate(quote.created_at)}
-                        </span>
-                      </div>
-                      <div className="flex flex-wrap gap-2 mb-2">
-                        <Badge variant="outline">
-                          {getAppliancesCount(quote.appliances_data)} Appliances
-                        </Badge>
-                        <Badge className="bg-green-100 text-green-700">
-                          {formatPrice(quote.total_cost)}
-                        </Badge>
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => onLoadQuote(quote)}
-                        className="text-blue-600 hover:text-blue-700"
-                      >
-                        View Details
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => deleteQuote(quote.id)}
-                        disabled={deletingId === quote.id}
-                        className="text-red-600 hover:text-red-700"
-                      >
-                        {deletingId === quote.id ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <Trash2 className="w-4 h-4" />
-                        )}
-                      </Button>
-                    </div>
+              <Card
+                key={quote.id}
+                role="link"
+                tabIndex={0}
+                onClick={() => navigate(`/quote/${quote.id}`)}
+                onKeyDown={(e) => e.key === 'Enter' && navigate(`/quote/${quote.id}`)}
+                className="border-l-4 border-l-orange-500 cursor-pointer hover:shadow-md focus-visible:ring-2 focus-visible:ring-orange-500"
+              >
+                <CardContent className="p-4 sm:p-6 space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-semibold">{quote.reference}</span>
+                    <Badge className="bg-green-100 text-green-700">{formatPrice(quote.totalCostNgn)}</Badge>
                   </div>
-                  
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                    <div>
-                      <span className="text-gray-500">Appliances:</span>
-                      <p className="font-medium">
-                        {getAppliancesPreview(quote.appliances_data)}
-                      </p>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">System Type:</span>
-                      <p className="font-medium">
-                        {getSystemType(quote.inverter_data)}
-                      </p>
-                    </div>
+                  <div className="flex flex-wrap gap-4 text-sm text-gray-600">
+                    <span className="flex items-center gap-1">
+                      <Calendar className="w-4 h-4" /> {formatDate(quote.createdAt)}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <MapPin className="w-4 h-4" /> {quote.state}
+                    </span>
+                    <Badge variant="outline" className="capitalize">{quote.status}</Badge>
+                    {quote.flags.map((flag) => (
+                      <Badge key={flag} variant="destructive">{flag.replace(/_/g, ' ').toLowerCase()}</Badge>
+                    ))}
                   </div>
                 </CardContent>
               </Card>
@@ -244,11 +116,9 @@ const SavedQuotes = ({ onBack, onLoadQuote }: {
           </div>
         )}
 
-        <div className="flex gap-4">
-          <Button variant="outline" onClick={onBack} className="flex-1">
-            Back to Home
-          </Button>
-        </div>
+        <Button variant="outline" onClick={onBack} className="w-full">
+          Back to Home
+        </Button>
       </CardContent>
     </Card>
   );
